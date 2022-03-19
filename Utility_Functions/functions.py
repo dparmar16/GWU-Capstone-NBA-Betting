@@ -6,7 +6,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import glob
 import re
-
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from tensorflow.keras.callbacks import EarlyStopping
 
 def Cal_rolling_mean_var(timeseries):
     rolling_mean = list()
@@ -67,23 +70,233 @@ def four_factors_averages():
 
     return four_factors_baseline_df
 
+
+# Translate odds to probability
+# https://help.smarkets.com/hc/en-gb/articles/214058369-How-to-calculate-implied-probability-in-betting
+# This will help us find mispriced market prices to bet on
+def odds_to_implied_prob(value):
+
+    assert (type(value) == float) | (type(value) == int), 'Value must be integer or float'
+
+    if value < 0:
+        prob = -1 * value / (-1 * value + 100) # Minus odds
+    else:
+        prob = 100 / (value + 100) # Plus odds
+
+    return prob
+
+
 # Correlation Reduction function takes in a dataframe
 # It finds correlated columns and drops one of them
 # The goal is to reduce multi-collinearity that causes model issues
-def correlation_reduction(dataset, threshold):
+def correlation_reduction(dataset, threshold, verbose=True):
    col_corr = set()  # Set of all the names of deleted columns
    corr_matrix = dataset.corr()
    for i in range(len(corr_matrix.columns)):
       for j in range(i):
-         if (corr_matrix.iloc[i, j] >= threshold) and (corr_matrix.columns[j] not in col_corr):
+         if (abs(corr_matrix.iloc[i, j]) >= threshold) and (corr_matrix.columns[j] not in col_corr):
             colname = corr_matrix.columns[i]  # getting the name of column
             col_corr.add(colname)
-            print(corr_matrix.columns[i] + ' - ' + corr_matrix.columns[j])
+            if verbose:
+                print(corr_matrix.columns[i] + ' - ' + corr_matrix.columns[j])
             if colname in dataset.columns:
                del dataset[colname]  # deleting the column from the dataset
 
    cols_kept = pd.Series(dataset.columns).values
    return dataset, cols_kept
+
+# Run logistic regression given data, features, target, and multicollinearity threshold
+# Returns performance metrics such as f1-score and classifcation matrix
+def logistic_model_process(df_train, df_test, features, target, threshold=0.75):
+    # Take feature columns for our X train matrix
+    X_train = df_train[features]
+    # Remove correlated features to reduce multicollinearity in linear model
+    X_train, x_cols_kept = correlation_reduction(X_train, threshold=threshold, verbose=False)
+    # Standardize (set to mean of 0 and standard deviation of 1) for all features
+    ss = StandardScaler()
+    ss.fit(X_train)
+    X_train = ss.transform(X_train)
+
+    # Get remaining features after dimension reduction and do same processing steps to X test
+    X_test = df_test[x_cols_kept]
+    X_test = ss.transform(X_test)
+
+    # Process y vector for train and test
+    y_train = df_train[target]
+    le = LabelEncoder()
+    le.fit(y_train)
+    y_train = le.transform(y_train)
+
+    y_test = df_test[target]
+    y_test = le.transform(y_test)
+
+    basemod = LogisticRegression()
+    basemod.fit(X_train, y_train)
+    y_pred = basemod.predict(X_test)
+    print(f1_score(y_pred, y_test))
+    print(confusion_matrix(y_pred, y_test))
+    print(accuracy_score(y_pred, y_test))
+
+    # Get relevant columns for output
+    df_out = df_test[['home_id', 'home_startDate', 'home_result', 'hH2h', 'vH2h']]
+    # Plan is to use model prediction to compare to market prices
+    # Get predictions and attach to rest of relevant data
+    y_pred_proba = basemod.predict_proba(X_test)
+    df_out['logistic_pred_home'] = y_pred_proba[:, 1]
+    df_out['logistic_pred_away'] = 1 - df_out['logistic_pred_home']
+
+    # Also want implied probability of winning given by odds to compare to our model
+    df_out['home_implied_prob'] = df_out['hH2h'].map(lambda x: odds_to_implied_prob(x))
+    df_out['away_implied_prob'] = df_out['vH2h'].map(lambda x: odds_to_implied_prob(x))
+
+    # Sort by date
+    df_out.sort_values(by='home_startDate', axis=0, ascending=True, inplace=True)
+
+    return df_out
+
+
+
+# Function to run MLP model given data, features, target, and model parameters
+# Returns model metrics such as:
+# 1) loss function (binary cross entropy)
+# 2) performance metric (accuracy)
+def mlp_model_process(df_train, df_test, features, target, model, epochs,
+                      early_stopping=True, decorrelate=False, threshold=0.75, title=None):
+    # Take feature columns for our X train matrix
+    # No need to drop due to multi-collinearity
+    # Use all features available
+    X_train = df_train[features]
+    X_test = df_test[features]
+
+    # Include option to remove multi-collinearity features
+    if decorrelate:
+        # Remove correlated features to reduce multicollinearity in linear model
+        X_train, x_cols_kept = correlation_reduction(X_train, threshold=threshold, verbose=False)
+        X_test = X_test[x_cols_kept]
+
+    # Need to standardize features as neural networks expect such data
+    # Fit on train and transform both train and test
+    ss = StandardScaler()
+    ss.fit(X_train)
+    X_train = ss.transform(X_train)
+    X_test = ss.transform(X_test)
+
+    # Get target value
+    y_train = df_train[target]
+    y_test = df_test[target]
+
+    # Encode target value
+    # Fit on train and transform both train and test
+    le = LabelEncoder()
+    le.fit(y_train)
+    y_train = le.transform(y_train)
+    y_test = le.transform(y_test)
+
+    # Fit the model given
+    # Early stopping is a callback
+    # https://machinelearningmastery.com/how-to-stop-training-deep-neural-networks-at-the-right-time-using-early-stopping/
+    if early_stopping:
+        es = EarlyStopping(monitor='val_accuracy',
+                           min_delta=0.0001,
+                           restore_best_weights=True,
+                           patience=1000,
+                           mode='max',
+                           verbose=1)
+        history = model.fit(X_train, y_train, validation_data=(X_test, y_test),
+                            epochs=epochs, verbose=0, callbacks=[es])
+    else:
+        history = model.fit(X_train, y_train, validation_data=(X_test, y_test),
+                            epochs=epochs, verbose=0)
+
+    # Look at metrics
+    _, train_acc = model.evaluate(X_train, y_train, verbose=0)
+    _, test_acc = model.evaluate(X_test, y_test, verbose=0)
+    print('Train: %.3f, Test: %.3f' % (train_acc, test_acc))
+    # plot loss during training
+    # Binary Cross entropy loss
+    # https://machinelearningmastery.com/how-to-choose-loss-functions-when-training-deep-learning-neural-networks/
+    plt.subplot(211)
+    if title == None:
+        plt.title('Loss')
+    else:
+        plt.title(f'{title} Loss')
+    plt.plot(history.history['loss'], label='train')
+    plt.plot(history.history['val_loss'], label='test')
+    plt.legend()
+    # plot accuracy during training
+    plt.subplot(212)
+    if title == None:
+        plt.title('Accuracy')
+    else:
+        plt.title(f'{title} Accuracy')
+    plt.plot(history.history['accuracy'], label='train')
+    plt.plot(history.history['val_accuracy'], label='test')
+    plt.legend()
+    plt.show()
+
+    print('\n')
+
+
+    # Get relevant columns for output
+    df_out = df_test[['home_id', 'home_startDate', 'home_result', 'hH2h', 'vH2h']]
+    # Plan is to use model prediction to compare to market prices
+    # Get predictions and attach to rest of relevant data
+    y_pred = model.predict(X_test)
+    df_out['mlp_pred_home'] = y_pred
+    df_out['mlp_pred_away'] = 1 - df_out['mlp_pred_home']
+
+    # Also want implied probability of winning given by odds to compare to our model
+    df_out['home_implied_prob'] = df_out['hH2h'].map(lambda x: odds_to_implied_prob(x))
+    df_out['away_implied_prob'] = df_out['vH2h'].map(lambda x: odds_to_implied_prob(x))
+
+    # Sort by date
+    df_out.sort_values(by='home_startDate', axis=0, ascending=True, inplace=True)
+
+    return df_out
+
+# Group columns values into a list
+# https://stackoverflow.com/questions/22219004/how-to-group-dataframe-rows-into-list-in-pandas-groupby/66018377#66018377
+# Use this to combine video game ratings by team into one column
+def f_multi(df, col_names):
+    if not isinstance(col_names, list):
+        col_names = [col_names]
+
+    values = df.sort_values(col_names).values.T
+
+    col_idcs = [df.columns.get_loc(cn) for cn in col_names]
+    other_col_names = [name for idx, name in enumerate(df.columns) if idx not in col_idcs]
+    other_col_idcs = [df.columns.get_loc(cn) for cn in other_col_names]
+
+    # split df into indexing colums(=keys) and data colums(=vals)
+    keys = values[col_idcs, :]
+    vals = values[other_col_idcs, :]
+
+    # list of tuple of key pairs
+    multikeys = list(zip(*keys))
+
+    # remember unique key pairs and ther indices
+    ukeys, index = np.unique(multikeys, return_index=True, axis=0)
+
+    # split data columns according to those indices
+    arrays = np.split(vals, index[1:], axis=1)
+
+    # resulting list of subarrays has same number of subarrays as unique key pairs
+    # each subarray has the following shape:
+    #    rows = number of non-grouped data columns
+    #    cols = number of data points grouped into that unique key pair
+
+    # prepare multi index
+    idx = pd.MultiIndex.from_arrays(ukeys.T, names=col_names)
+
+    list_agg_vals = dict()
+    for tup in zip(*arrays, other_col_names):
+        col_vals = tup[:-1]  # first entries are the subarrays from above
+        col_name = tup[-1]  # last entry is data-column name
+
+        list_agg_vals[col_name] = col_vals
+
+    df2 = pd.DataFrame(data=list_agg_vals, index=idx)
+    return df2
 
 # For betting data only
 # Combine raw files into a single file for processing

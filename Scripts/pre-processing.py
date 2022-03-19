@@ -236,7 +236,7 @@ pr = player_ratings[['id', 'seasonYear_shifted', 'rating']]
 pr.rename(columns={'id': 'playerId'}, inplace=True)
 game_player_ratings = pd.merge(gp, pr, how='left', left_on=['playerId', 'seasonYear'], right_on=['playerId', 'seasonYear_shifted'])
 # Replace unknown ratings with 69 (as that seems to be the baseline replacement player)
-replacement_level = 70
+replacement_level = 69
 game_player_ratings['rating'].replace(np.nan, replacement_level, inplace=True)
 game_player_ratings.to_csv('Processed/game_player_ratings.csv', index_label=False)
 
@@ -314,7 +314,7 @@ final_df_for_mod = final_df[['home_team_efg_shifted',
                              'away_team_efg_ma_shifted','away_team_oreb_rate_ma_shifted','away_team_ft_rate_ma_shifted','away_team_to_rate_ma_shifted',
                                 'away_avg_2k_rating', 'away_weighted_avg_2k_rating',
                              'hH2h', 'vH2h', 'home_result', 'home_plusMinus','hSpreadPoints','hSpreadOdds', 'vSpreadOdds', 'home_id',
-                               'home_season_games_played', 'away_season_games_played', 'home_seasonYear']]
+                               'home_season_games_played', 'away_season_games_played', 'home_seasonYear', 'home_startDate']]
 
 
 final_df_for_mod.to_csv('Processed/base_file_for_model.csv', index_label=False)

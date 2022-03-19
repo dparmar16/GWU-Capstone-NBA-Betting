@@ -53,6 +53,10 @@ df = pd.read_csv('Processed/base_file_for_model.csv')
 # First train-test split is years
 df_train1 = df[(df['home_seasonYear'] == 2015) | (df['home_seasonYear'] == 2016) | (df['home_seasonYear'] == 2017)]
 df_test1 = df[(df['home_seasonYear'] == 2018) | (df['home_seasonYear'] == 2019)]
+# Write to csv to use in other models
+df_train1.to_csv('Processed/df_train1.csv', index_label=False)
+df_test1.to_csv('Processed/df_test1.csv', index_label=False)
+
 
 # Second train-test split is first half and second  half of the season
 # Get a sense of distribution (last season doesn't have games past 60 which explains shape)
@@ -61,13 +65,21 @@ df_test1 = df[(df['home_seasonYear'] == 2018) | (df['home_seasonYear'] == 2019)]
 # plt.show()
 # plt.hist(df['away_season_games_played'], bins=110)
 # plt.show()
+# Make sure to exclude playoffs in this one
 
 df_train2 = df[(df['home_season_games_played'] < 60) | (df['away_season_games_played'] < 60)]
-df_test2 = df[(df['home_season_games_played'] >= 60) & (df['away_season_games_played'] >= 60)]
+df_test2 = df[(df['home_season_games_played'] >= 60) & (df['away_season_games_played'] >= 60)
+              & (df['home_season_games_played'] < 83) & (df['away_season_games_played'] < 83)]
+# Write to csv to use in other models
+df_train2.to_csv('Processed/df_train2.csv', index_label=False)
+df_test2.to_csv('Processed/df_test2.csv', index_label=False)
 
 # Random split
 df_train3 = df.sample(frac=0.75)
 df_test3 = df.drop(df_train3.index)
+# Write to csv to use in other models
+df_train3.to_csv('Processed/df_train3.csv', index_label=False)
+df_test3.to_csv('Processed/df_test3.csv', index_label=False)
 
 # Get feature list
 features = ['home_team_efg_shifted', 'home_team_oreb_rate_shifted', 'home_team_ft_rate_shifted', 'home_team_to_rate_shifted', 'home_team_ha_efg_shifted', 'home_team_ha_oreb_rate_shifted',
@@ -142,8 +154,16 @@ shap.summary_plot(shap_values, X_test1,
                   plot_size=(30, 14))
 
 # Run second and third models using function to streamline process
+# Add first model as well for consistency of result reporting
+print('Results readout 1')
+logistic_output1 = logistic_model_process(df_train=df_train1, df_test=df_test1,
+                       features=features, target='home_result', threshold=0.8)
+logistic_output1.to_csv('Processed/logistic_model_traintest1_output.csv', index_label=False, index=False)
+
+print('Results readout 2')
 logistic_model_process(df_train=df_train2, df_test=df_test2,
                        features=features, target='home_result', threshold=0.8)
+print('Results readout 3')
 logistic_model_process(df_train=df_train3, df_test=df_test3,
                        features=features, target='home_result', threshold=0.8)
 
@@ -202,6 +222,21 @@ logistic_model_process(df_train=df_train3, df_test=df_test3,
 # print(y_test_all['hH2h'])
 # home_prob = np.where(y_test_all['hH2h'] < 0, -1 * y_test_all['hH2h'] / (-1 * y_test_all['hH2h'] + 100), 100 / (y_test_all['hH2h'] + 100))
 # print(home_prob)
+# def odds_to_implied_prob(value):
+#     try:
+#         np.where(value < 0,
+#                  -1 * value / (-1 * value + 100),  # Minus odds
+#                  100 / (value + 100)) # Plus odds
+#     except ZeroDivisionError:
+#         print(value < 0)
+#         print('The value causing an error is',value)
+#
+#     if value < 0:
+#         prob = -1 * value / (-1 * value + 100) # Minus odds
+#     else:
+#         prob = 100 / (value + 100) # Plus odds
+#
+#     return prob
 #
 # mycmap = colors.ListedColormap(['green', 'red'])
 # plt.scatter(home_prob, predicted_probs, c=result, cmap=mycmap, s=16)
