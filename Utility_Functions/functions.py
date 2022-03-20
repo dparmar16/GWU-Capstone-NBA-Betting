@@ -85,6 +85,35 @@ def odds_to_implied_prob(value):
 
     return prob
 
+# Formula for conversion here:
+# http://www.betsmart.co/odds-conversion-formulas/#americantodecimal
+def american_converter_to_decimal(american):
+
+    assert (type(american) == float) | (type(american) == int), 'Value must be integer or float'
+
+    if american < 0:
+        return 1 + (100 / - american) # Minus odds
+    else:
+        return (american / 100) + 1 # Plus odds
+
+def kelly_criterion(model_prob_win, market_odds, multiplier=1, max=None):
+    # First convert to decimal odds
+    # But b in this function is market return, which is decimal - 1
+    b = american_converter_to_decimal(market_odds) - 1
+    p, q = model_prob_win, 1- model_prob_win
+
+    # Calculate kelly criterion but also multply by multiplier
+    # For example, in "half kelly" we would bet half the recommendation
+    f = multiplier * (b * p - q) / b
+
+    # If max bet percentage is given, ensure we are not betting more than that
+    # But value should not be less than 0
+    if max is not None:
+        out_pre = np.where(f > max, max, f)
+        out = np.where(out_pre < 0, 0, out_pre)
+        return out
+    else:
+        return np.where(f < 0, 0, f)
 
 # Correlation Reduction function takes in a dataframe
 # It finds correlated columns and drops one of them
