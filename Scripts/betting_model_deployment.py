@@ -137,8 +137,10 @@ def betting_deployment(df,
 
     earliest_date = min(df['home_startDate'])
     daybeforestart = (datetime.strptime(earliest_date, '%Y-%m-%d') - timedelta(1)).strftime('%Y-%m-%d')
-    capital_dict = {}
-    capital_dict[daybeforestart] = initial_bankroll
+    #capital_dict = {}
+    #capital_dict[daybeforestart] = initial_bankroll
+    capital_list = []
+    capital_list.append([daybeforestart, initial_bankroll])
 
     # 1. loop through each day --> get individual date block from df
     # 2. find all positive kelly and make those bets but cap it
@@ -150,34 +152,35 @@ def betting_deployment(df,
             print('the daily df is')
             print(daily)
             for idx, data in daily.iterrows():
-                kelly_home = kelly_criterion(model_prob_win=data['home_prob'], market_odds=data['hH2h'], multiplier=kelly_multiplier, max=max_percentage)
-                kelly_away = kelly_criterion(model_prob_win=data['away_prob'], market_odds=data['vH2h'], multiplier=kelly_multiplier, max=max_percentage)
+                kelly_home = kelly_criterion(model_prob_win=data['home_prob'], market_odds=data['hH2h'],
+                                             multiplier=kelly_multiplier, max=max_percentage)
+                kelly_away = kelly_criterion(model_prob_win=data['away_prob'], market_odds=data['vH2h'],
+                                             multiplier=kelly_multiplier, max=max_percentage)
                 print('The data is')
                 print(data)
                 print('Kelly home is', kelly_home)
                 print('Kelly away is', kelly_away)
+                print(data['home_result'])
                 if kelly_home > 0 and kelly_away <= 0:
                     wager_amount = bankroll_amount * kelly_home
                     home_money_outcome = np.where(data['home_result'] == 1,
-                                       df['hH2h_decimal'] * wager_amount,
+                                       data['hH2h_decimal'] * wager_amount,
                                        -1 * wager_amount)
                     daily_return += home_money_outcome
                     print('Home money delta is', home_money_outcome)
                 if kelly_away > 0 and kelly_home <= 0:
-                    wager_amount = bankroll_amount * kelly_home
+                    wager_amount = bankroll_amount * kelly_away
                     away_money_outcome = np.where(data['home_result'] == 0,
-                                                  df['vH2h_decimal'] * wager_amount,
+                                                  data['vH2h_decimal'] * wager_amount,
                                                   -1 * wager_amount)
                     daily_return += away_money_outcome
                     print('Away money delta is', away_money_outcome)
                 print('\n\n\n')
 
             bankroll_amount -= daily_return
-            capital_dict[dt] = bankroll_amount
+            capital_list.append([dt, bankroll_amount])
 
-
-
-        result = pd.DataFrame.from_dict(capital_dict)
+        result = pd.DataFrame(capital_list, columns=['date', 'capital'])
 
     if bet_strategy == 'percentage':
         pass
@@ -189,22 +192,34 @@ def betting_deployment(df,
     plt.ylabel('Capital')
     if bet_strategy == 'kelly':
         plt.title(f'Return on {initial_bankroll} with Kelly strategy with Kelly ratio {kelly_multiplier}.'
-                  f' \nMax bet {max_percentage}.')
+                  f' \nMax bet {max_percentage} and strategy {bet_strategy}.')
     if bet_strategy == 'percentage':
         plt.title(f'Return on {initial_bankroll} with percentage strategy with percentage {percentage_stake}.'
-                  f' \nMax bet {max_percentage} and alpha type {alpha_type} and threshold {alpha_threshold}.')
+                  f' \nMax bet {max_percentage} and alpha type {alpha_type} and threshold {alpha_threshold}.'
+                  f'\nBetting strategy  and strategy {bet_strategy}.')
     plt.show()
 
     return result
 
 
 betting_deployment(df=combined[combined['home_startDate'] <= '2018-11-10'],
-                   model_optimism='opt',
+                   model_optimism='avg',
                    bet_strategy='kelly',
-                   kelly_multiplier=1,
+                   kelly_multiplier=0.5,
                    percentage_stake=0.01,
                    bankroll_amount=1,
                    alpha_type='relative',  # 'absolute' or 'relative'
                    alpha_threshold=0.075,
-                   max_percentage=0.1,
+                   max_percentage=0.01,
+                   )
+
+betting_deployment(df=combined[combined['home_startDate'] <= '2020-11-10'],
+                   model_optimism='avg',
+                   bet_strategy='kelly',
+                   kelly_multiplier=0.5,
+                   percentage_stake=0.01,
+                   bankroll_amount=1,
+                   alpha_type='relative',  # 'absolute' or 'relative'
+                   alpha_threshold=0.075,
+                   max_percentage=0.05,
                    )
