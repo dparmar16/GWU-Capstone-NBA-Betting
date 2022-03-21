@@ -165,7 +165,7 @@ def betting_deployment(df,
                     daily_return += away_money_outcome
             if bet_strategy == 'percentage':
                 # Wager the percentage given, but make sure it's not more than the max allowed
-                wager_amount = np.where(percentage_stake > max_percentage, max_percentage, percentage_stake)
+                wager_amount = max(np.where(percentage_stake > max_percentage, max_percentage, percentage_stake), 0)
                 if alpha_type == 'relative':
                     home_alpha = data['home_edge_relative']
                     away_alpha = data['away_edge_relative']
