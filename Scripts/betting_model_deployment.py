@@ -40,6 +40,16 @@ print(combined.head(5))
 # 3     4548     2018-11-07            1 -270.0  220.0            0.764635            0.235365           0.729730           0.312500       0.768728       0.231272
 # 4     4546     2018-11-07            1 -550.0  400.0            0.814913            0.185087           0.846154           0.200000       0.797763       0.202237
 
+# Look at the models to see where they agree and when they are correct
+colormap = {0: 'red', 1: 'green'}
+plt.scatter(combined['logistic_pred_home'], combined['mlp_pred_home'], c=combined['home_result'].map(colormap))
+plt.show()
+
+# Look at how models correlate to output and when they are correct
+colormap = {0: 'red', 1: 'green'}
+plt.scatter(combined['logistic_pred_home'], combined['home_implied_prob'], c=combined['home_result'].map(colormap))
+plt.show()
+
 # figure out rule set to bet on and see return
 # 1) Use MLP, Logistic or both? --> 1) avg of both 2) pessimistic model (less delta) 3) optimistic model (more delta)
 # 2) Use absolute delta (2% market to 4% model is 2% edge), relative delta (2% to 4% is considered 100% edge)
@@ -52,6 +62,13 @@ combined['home_pes'] = combined.apply(lambda x: min(x.logistic_pred_home, x.mlp_
 combined['away_opt'] = combined.apply(lambda x: max(x.logistic_pred_away, x.mlp_pred_away), axis=1)
 combined['away_avg'] = combined.apply(lambda x: np.mean([x.logistic_pred_away, x.mlp_pred_away]), axis=1)
 combined['away_pes'] = combined.apply(lambda x: min(x.logistic_pred_away, x.mlp_pred_away), axis=1)
+
+# Add "right"/"wrong" column - bets model would make using alpha
+# Bring in characteristics to see where it's more often right/wrong
+# - regular season (early/late), playoff
+# - home games, away games
+# - back to back vs more rest for each team
+# - specific teams at home/away
 
 def betting_deployment(df,
                        model_optimism,

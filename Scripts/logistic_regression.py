@@ -7,7 +7,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, f1_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-# import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
 # from matplotlib import colors
 
 # Import re-usable functions from utility folder
@@ -95,6 +96,18 @@ features = ['home_team_efg_shifted', 'home_team_oreb_rate_shifted', 'home_team_f
             ,'hSpreadPoints' # Keep point spread in model as a feature as it is known prior to game and is valuable information
             ]
 
+# Do PCA analysis
+#Fitting the PCA algorithm with our Data
+x_scaled = StandardScaler().fit_transform(df_train1[features])
+pca = PCA().fit(x_scaled)
+#Plotting the Cumulative Summation of the Explained Variance
+plt.figure()
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('Number of Components')
+plt.ylabel('Variance (%)') #for each component
+plt.title(f'Explained Variance in Original Dataset with {len(features)} features')
+plt.show()
+
 # Take feature columns for our X train matrix
 X_train1 = df_train1[features]
 # Remove correlated features to reduce multicollinearity in linear model
@@ -106,6 +119,16 @@ print(pd.DataFrame(X_train1).corr(method='pearson'))
 ss = StandardScaler()
 ss.fit(X_train1)
 X_train1 = ss.transform(X_train1)
+
+#Fitting the PCA algorithm with our correlation reduced dataset
+pca = PCA().fit(X_train1)
+#Plotting the Cumulative Summation of the Explained Variance
+plt.figure()
+plt.plot(np.cumsum(pca.explained_variance_ratio_))
+plt.xlabel('Number of Components')
+plt.ylabel('Variance (%)') #for each component
+plt.title(f'Explained Variance in Reduced Dataset with {len(x_cols_kept)} features')
+plt.show()
 
 # Get remaining features after dimension reduction and do same processing steps to X test
 X_test1 = df_test1[x_cols_kept]
@@ -152,6 +175,24 @@ shap.summary_plot(shap_values, X_test1,
                   plot_type='dot',
                   max_display=len(x_cols_kept),
                   plot_size=(30, 14))
+
+shap.plots.bar(shap_values, max_display=len(x_cols_kept))
+
+# Get feature importances
+# https://github.com/slundberg/shap/issues/632
+feature_importances_logistic = np.abs(shap_values.values).mean(0)
+
+plt.bar(x_cols_kept,feature_importances_logistic)
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.show()
+
+feature_importance_sorted = pd.DataFrame(list(zip(x_cols_kept,feature_importances_logistic)),columns=['col_name','feature_importance_vals'])
+feature_importance_sorted.sort_values(by=['feature_importance_vals'],ascending=False,inplace=True)
+plt.bar(feature_importance_sorted['col_name'],feature_importance_sorted['feature_importance_vals'])
+plt.xticks(rotation=90)
+plt.tight_layout()
+plt.show()
 
 # Run second and third models using function to streamline process
 # Add first model as well for consistency of result reporting
