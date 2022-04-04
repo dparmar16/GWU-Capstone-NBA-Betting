@@ -259,7 +259,8 @@ ratings_agg['ratings_cleaned'] = [pad_player_ratings(x) for x in ratings_agg['ra
 # Take mean and weighted average for features
 ratings_agg['avg_2k_rating'] = np.mean(ratings_agg['ratings_cleaned'].tolist(), axis=1)
 ratings_agg['weighted_avg_2k_rating'] = np.average(ratings_agg['ratings_cleaned'].tolist(), weights=player_weights, axis=1)
-ratings_df = ratings_agg[['id', 'teamId', 'avg_2k_rating', 'weighted_avg_2k_rating']]
+ratings_agg['best_player_2k_rating'] = np.max(ratings_agg['ratings_cleaned'].to_list(), axis=1)
+ratings_df = ratings_agg[['id', 'teamId', 'avg_2k_rating', 'weighted_avg_2k_rating', 'best_player_2k_rating']]
 
 # Spot checking missing players to make sure they are not in the 2k ratings
 # games[games.id ==6097]
@@ -272,9 +273,33 @@ ratings_df = ratings_agg[['id', 'teamId', 'avg_2k_rating', 'weighted_avg_2k_rati
 # team_players[team_players.id == 802]
 
 full_features = pd.merge(full_features, ratings_df, left_on=['home_id', 'home_teamId'], right_on=['id', 'teamId'])
-full_features.rename(columns={'avg_2k_rating': 'home_avg_2k_rating', 'weighted_avg_2k_rating':'home_weighted_avg_2k_rating'}, inplace=True)
+full_features.rename(columns={'avg_2k_rating': 'home_avg_2k_rating',
+                              'weighted_avg_2k_rating':'home_weighted_avg_2k_rating',
+                              'best_player_2k_rating': 'home_best_player_2k_rating'}, inplace=True)
 full_features = pd.merge(full_features, ratings_df, left_on=['home_id', 'away_teamId'], right_on=['id', 'teamId'])
-full_features.rename(columns={'avg_2k_rating': 'away_avg_2k_rating', 'weighted_avg_2k_rating':'away_weighted_avg_2k_rating'}, inplace=True)
+full_features.rename(columns={'avg_2k_rating': 'away_avg_2k_rating',
+                              'weighted_avg_2k_rating':'away_weighted_avg_2k_rating',
+                              'best_player_2k_rating': 'away_best_player_2k_rating'}, inplace=True)
+
+# Get a playoff flag
+games_playoff_flag = games[['id', 'seasonStage']]
+games_playoff_flag['playoff_flag'] = np.where(games_playoff_flag['seasonStage'] == 4, 1, 0)
+games_playoff_flag = games_playoff_flag[['id', 'playoff_flag']]
+#print(games_playoff_flag.head(5))
+
+
+games_odds_cleaned = games_odds[['id', 'seasonYear','hTeamId', 'vTeamId', 'commenceDate', 'hH2h', 'vH2h',
+                                 'hSpreadPoints', 'vSpreadPoints', 'hSpreadOdds', 'vSpreadOdds']][games_odds['siteKey'] == 'unknown']
+home_spread_points = games_odds_cleaned[['seasonYear', 'commenceDate', 'id', 'hTeamId', 'hSpreadPoints']]
+away_spread_points = games_odds_cleaned[['seasonYear', 'commenceDate', 'id', 'vTeamId', 'vSpreadPoints']]
+combined_spread_points = pd.concat([home_spread_points.rename(columns={'hTeamId':'teamId', 'hSpreadPoints':'spread'}),
+                                    away_spread_points.rename(columns={'vTeamId':'teamId', 'vSpreadPoints':'spread'})], ignore_index=True)
+combined_spread_points.sort_values(by=['commenceDate', 'teamId'], inplace=True)
+combined_spread_points['spread_last10'] = combined_spread_points.groupby(by=['seasonYear','teamId'])['spread'].transform(lambda x: x.rolling(10, 1).mean())
+#print(combined_spread_points.head(20))
+#print(combined_spread_points.tail(20))
+combined_spread_points = combined_spread_points[['id', 'teamId', 'spread_last10']]
+#print(combined_spread_points.head(20))
 
 
 # Remove sample that
@@ -284,17 +309,29 @@ full_features = full_features[full_features.home_startDate <= '2020-03-11']
 full_features = full_features[full_features.home_season_games_played >= 10]
 full_features = full_features[full_features.away_season_games_played >= 10]
 
-
-
-games_odds_cleaned = games_odds[['id','hTeamId', 'vTeamId', 'commenceDate', 'hH2h', 'vH2h', 'hSpreadPoints','hSpreadOdds', 'vSpreadOdds']]
-
-# Merge features together
+# Merge features together by merging to the existing dataframe
 final_df = pd.merge(full_features, games_odds_cleaned,
                     left_on=['home_id'],
                     right_on=['id'],
                     how='inner')
 
-final_df_for_mod = final_df[['home_team_efg_shifted',
+final_df = pd.merge(final_df, combined_spread_points,
+                    left_on=['home_id','home_teamId'],
+                    right_on=['id','teamId'],
+                    how='inner')
+final_df.rename(columns={'spread_last10': 'home_spread_last10'}, inplace=True)
+final_df = pd.merge(final_df, combined_spread_points,
+                    left_on=['home_id', 'away_teamId'],
+                    right_on=['id','teamId'],
+                    how='inner')
+final_df.rename(columns={'spread_last10': 'away_spread_last10'}, inplace=True)
+
+final_df = pd.merge(final_df, games_playoff_flag,
+                    left_on=['home_id'],
+                    right_on=['id'],
+                    how='inner')
+
+cols_to_keep = ['home_team_efg_shifted',
                                'home_team_oreb_rate_shifted', 'home_team_ft_rate_shifted', 'home_team_to_rate_shifted',
                                'home_team_ha_efg_shifted', 'home_team_ha_oreb_rate_shifted', 'home_team_ha_ft_rate_shifted',
                                'home_team_ha_to_rate_shifted',
@@ -303,7 +340,7 @@ final_df_for_mod = final_df[['home_team_efg_shifted',
                              'home_win_percentage_last10_shifted','home_win_percentage_ha_last10_shifted','home_b2b_flag',
                                'home_avg_point_differential_last10_shifted','home_avg_point_differential_last10_ha_shifted',
                              'home_team_efg_ma_shifted','home_team_oreb_rate_ma_shifted','home_team_ft_rate_ma_shifted','home_team_to_rate_ma_shifted',
-                                'home_avg_2k_rating', 'home_weighted_avg_2k_rating',
+                                'home_avg_2k_rating', 'home_weighted_avg_2k_rating', 'home_best_player_2k_rating', 'home_best_player_2k_rating',
                                'away_team_efg_shifted',
                                'away_team_oreb_rate_shifted', 'away_team_ft_rate_shifted', 'away_team_to_rate_shifted', 'away_team_ha_efg_shifted',
                                'away_team_ha_oreb_rate_shifted', 'away_team_ha_ft_rate_shifted', 'away_team_ha_to_rate_shifted',
@@ -312,9 +349,13 @@ final_df_for_mod = final_df[['home_team_efg_shifted',
                              'away_win_percentage_last10_shifted','away_win_percentage_ha_last10_shifted','away_b2b_flag',
                                'away_avg_point_differential_last10_shifted','away_avg_point_differential_last10_ha_shifted',
                              'away_team_efg_ma_shifted','away_team_oreb_rate_ma_shifted','away_team_ft_rate_ma_shifted','away_team_to_rate_ma_shifted',
-                                'away_avg_2k_rating', 'away_weighted_avg_2k_rating',
-                             'hH2h', 'vH2h', 'home_result', 'home_plusMinus','hSpreadPoints','hSpreadOdds', 'vSpreadOdds', 'home_id',
-                               'home_season_games_played', 'away_season_games_played', 'home_seasonYear', 'home_startDate']]
+                                'away_avg_2k_rating', 'away_weighted_avg_2k_rating', 'away_best_player_2k_rating', 'away_best_player_2k_rating',
+                            'hH2h', 'vH2h', 'home_result', 'home_plusMinus','hSpreadPoints','hSpreadOdds', 'vSpreadOdds', 'home_id',
+                             'home_spread_last10', 'away_spread_last10',
+                'home_season_games_played', 'away_season_games_played', 'home_seasonYear', 'home_startDate', 'playoff_flag']
+
+
+final_df_for_mod = final_df[cols_to_keep]
 
 
 final_df_for_mod.to_csv('Processed/base_file_for_model.csv', index_label=False)

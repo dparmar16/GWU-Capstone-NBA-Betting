@@ -10,6 +10,13 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from tensorflow.keras.callbacks import EarlyStopping
+import statsmodels
+from statsmodels.discrete.discrete_model import Logit
+from sklearn.naive_bayes import GaussianNB
+
+import warnings
+from pandas.core.common import SettingWithCopyWarning
+warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
 def Cal_rolling_mean_var(timeseries):
     rolling_mean = list()
@@ -159,12 +166,13 @@ def logistic_model_process(df_train, df_test, features, target, threshold=0.75):
     y_test = df_test[target]
     y_test = le.transform(y_test)
 
-    basemod = LogisticRegression()
+    basemod = LogisticRegression(fit_intercept=True)
     basemod.fit(X_train, y_train)
     y_pred = basemod.predict(X_test)
-    print(f1_score(y_pred, y_test))
-    print(confusion_matrix(y_pred, y_test))
-    print(accuracy_score(y_pred, y_test))
+    print(f'Logistic regression output for target {target} and features {features}.')
+    print('F1 score is',f1_score(y_pred, y_test))
+    print('Accuracy score is', accuracy_score(y_pred, y_test))
+    print('Confusion matrix is\n', confusion_matrix(y_pred, y_test))
 
     # Get relevant columns for output
     df_out = df_test[['home_id', 'home_startDate', 'home_result', 'hH2h', 'vH2h']]
@@ -183,7 +191,68 @@ def logistic_model_process(df_train, df_test, features, target, threshold=0.75):
 
     return df_out
 
+def classical_model_process(df_train, df_test, features, target, type, threshold=0.75, pca=False):
 
+    # If PCA is true, then return PCA features as way to reduce dimensionality
+    if pca:
+        something
+    # If PCA is false, then reduce dimensionality by removing highly correlated columns
+    # This preserves the original features for explainability purposes
+    else:
+        # Take feature columns for our X train matrix
+        X_train = df_train[features]
+        # Remove correlated features to reduce multicollinearity in linear model
+        X_train, x_cols_kept = correlation_reduction(X_train, threshold=threshold, verbose=False)
+        # Standardize (set to mean of 0 and standard deviation of 1) for all features
+        ss = StandardScaler()
+        ss.fit(X_train)
+        X_train = ss.transform(X_train)
+
+        # Get remaining features after dimension reduction and do same processing steps to X test
+        X_test = df_test[x_cols_kept]
+        X_test = ss.transform(X_test)
+
+    # Process y vector for train and test
+    y_train = df_train[target]
+    le = LabelEncoder()
+    le.fit(y_train)
+    y_train = le.transform(y_train)
+
+    y_test = df_test[target]
+    y_test = le.transform(y_test)
+
+    if type == 'logistic':
+        basemod = LogisticRegression(fit_intercept=True)
+        basemod.fit(X_train, y_train)
+        y_pred = basemod.predict(X_test)
+        print(f'Logistic regression output for target {target} and features {features}.')
+        print('F1 score is', f1_score(y_pred, y_test))
+        print('Accuracy score is', accuracy_score(y_pred, y_test))
+        print('Confusion matrix is\n', confusion_matrix(y_pred, y_test))
+
+    if type == 'logit':
+        X_train1 = statsmodels.tools.add_constant(X_train, has_constant='add')
+        logit_mod = Logit(endog=y_train, exog=X_train1)
+        logit_result = logit_mod.fit()
+        X_test1 = statsmodels.tools.add_constant(X_test, has_constant='add')
+        logit_probs = logit_result.predict(X_test1)
+        logit_preds = np.where(logit_probs >= 0.5, 1, 0)
+        print(f'Logit MLE output for target {target} and features {features}.')
+        print('F1 score is', f1_score(y_true=y_test, y_pred=logit_preds))
+        print('Accuracy score is', accuracy_score(y_true=y_test, y_pred=logit_preds))
+        print('Confusion matrix is\n', confusion_matrix(y_true=y_test, y_pred=logit_preds))
+
+
+    if type == 'naive-bayes':
+        clf = GaussianNB()
+        clf.fit(X=X_train, y=y_train)
+        nb_preds = clf.predict(X=X_test)
+        print(f'Gaussian Naive Bayes output for target {target} and features {features}.')
+        print('F1 score is', f1_score(y_true=y_test, y_pred=nb_preds))
+        print('Accuracy score is', accuracy_score(y_true=y_test, y_pred=nb_preds))
+        print('Confusion matrix is\n', confusion_matrix(y_true=y_test, y_pred=nb_preds))
+
+    return None
 
 # Function to run MLP model given data, features, target, and model parameters
 # Returns model metrics such as:
@@ -241,6 +310,7 @@ def mlp_model_process(df_train, df_test, features, target, model, epochs,
     _, train_acc = model.evaluate(X_train, y_train, verbose=0)
     _, test_acc = model.evaluate(X_test, y_test, verbose=0)
     print('Train: %.3f, Test: %.3f' % (train_acc, test_acc))
+
     # plot loss during training
     # Binary Cross entropy loss
     # https://machinelearningmastery.com/how-to-choose-loss-functions-when-training-deep-learning-neural-networks/
@@ -271,6 +341,7 @@ def mlp_model_process(df_train, df_test, features, target, model, epochs,
     # Plan is to use model prediction to compare to market prices
     # Get predictions and attach to rest of relevant data
     y_pred = model.predict(X_test)
+
     df_out['mlp_pred_home'] = y_pred
     df_out['mlp_pred_away'] = 1 - df_out['mlp_pred_home']
 
@@ -280,6 +351,12 @@ def mlp_model_process(df_train, df_test, features, target, model, epochs,
 
     # Sort by date
     df_out.sort_values(by='home_startDate', axis=0, ascending=True, inplace=True)
+
+    # Print metrics
+    y_pred_for_scores = np.where(y_pred >= 0.5, 1, 0)
+    print('Ran MLP model')
+    print('Accuracy score is', accuracy_score(y_pred_for_scores, y_test))
+    print('F1 score is', f1_score(y_pred_for_scores, y_test))
 
     return df_out
 
