@@ -195,7 +195,7 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
 
     # If PCA is true, then return PCA features as way to reduce dimensionality
     if pca:
-        something
+        pass # Insert here
     # If PCA is false, then reduce dimensionality by removing highly correlated columns
     # This preserves the original features for explainability purposes
     else:
