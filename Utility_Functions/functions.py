@@ -7,27 +7,34 @@ import matplotlib.pyplot as plt
 import glob
 import re
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
+from sklearn.metrics import confusion_matrix, f1_score, accuracy_score, log_loss
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from tensorflow.keras.callbacks import EarlyStopping
 import statsmodels
 from statsmodels.discrete.discrete_model import Logit
 from sklearn.naive_bayes import GaussianNB
+from statsmodels.tsa.stattools import adfuller
+from statsmodels.graphics.tsaplots import plot_acf , plot_pacf
+
 
 import warnings
 from pandas.core.common import SettingWithCopyWarning
 warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
 
-def Cal_rolling_mean_var(timeseries):
+def Cal_rolling_mean_var(timeseries, window=20):
     rolling_mean = list()
     rolling_var = list()
 
     for i in range(1, len(timeseries)):
-        rolling_mean.append(np.mean(timeseries[0:i]))
-        rolling_var.append(np.var(timeseries[0:i]))
+        if i <= window:
+            rolling_mean.append(np.mean(timeseries[0:i]))
+            rolling_var.append(np.var(timeseries[0:i]))
+        else:
+            rolling_mean.append(np.mean(timeseries[i-window:i]))
+            rolling_var.append(np.var(timeseries[i-window:i]))
 
     fig, axs = plt.subplots(2)
-    fig.suptitle('Rolling mean and variance')
+    fig.suptitle(f'Rolling mean and variance with window of {window}')
     axs[0].plot(rolling_mean, c='red')
     axs[0].set_title('Rolling Mean')
     axs[1].plot(rolling_var, c='green')
@@ -35,6 +42,26 @@ def Cal_rolling_mean_var(timeseries):
     plt.show()
 
     return rolling_mean, rolling_var
+
+def ACF_PACF_Plot(y,lags):
+    #acf = sm.tsa.stattools.acf(y, nlags=lags)
+    #pacf = sm.tsa.stattools.pacf(y, nlags=lags)
+    fig = plt.figure()
+    plt.subplot(211)
+    plt.title('ACF/PACF of the raw data')
+    plot_acf(y, ax=plt.gca(), lags=lags)
+    plt.subplot(212)
+    plot_pacf(y, ax=plt.gca(), lags=lags)
+    fig.tight_layout(pad=3)
+    plt.show()
+
+def ADF_Cal(x):
+    result = adfuller(x)
+    print("ADF Statistic: %f" %result[0])
+    print('p-value: %f' % result[1])
+    print('Critical Values:')
+    for key, value in result[4].items():
+        print('\t%s: %.3f' % (key, value))
 
 def efg(fgm, fga, tpm):
     efg = (float(fgm) + 0.5 * float(tpm)) / float(fga)
@@ -169,16 +196,26 @@ def logistic_model_process(df_train, df_test, features, target, threshold=0.75):
     basemod = LogisticRegression(fit_intercept=True)
     basemod.fit(X_train, y_train)
     y_pred = basemod.predict(X_test)
+    y_pred_proba = basemod.predict_proba(X_test)
+
+    y_pred_proba_for_metrics = [float(x) for x in y_pred_proba[:, 1]]
+
+    # print(type(y_pred_proba))
+    # print(type(y_pred_proba[:, 1]))
+    # print(y_pred_proba[:, 1])
+    # print(y_pred_proba.dtype)
+
     print(f'Logistic regression output for target {target} and features {features}.')
     print('F1 score is',f1_score(y_pred, y_test))
     print('Accuracy score is', accuracy_score(y_pred, y_test))
+    print('Log-loss score is', log_loss(y_test, y_pred_proba_for_metrics))
     print('Confusion matrix is\n', confusion_matrix(y_pred, y_test))
 
     # Get relevant columns for output
     df_out = df_test[['home_id', 'home_startDate', 'home_result', 'hH2h', 'vH2h']]
     # Plan is to use model prediction to compare to market prices
     # Get predictions and attach to rest of relevant data
-    y_pred_proba = basemod.predict_proba(X_test)
+    #y_pred_proba = basemod.predict_proba(X_test)
     df_out['logistic_pred_home'] = y_pred_proba[:, 1]
     df_out['logistic_pred_away'] = 1 - df_out['logistic_pred_home']
 
@@ -225,9 +262,12 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         basemod = LogisticRegression(fit_intercept=True)
         basemod.fit(X_train, y_train)
         y_pred = basemod.predict(X_test)
+        y_pred_proba = basemod.predict_proba(X_test)
+        y_pred_proba_for_metrics = [float(x) for x in y_pred_proba[:, 1]]
         print(f'Logistic regression output for target {target} and features {features}.')
         print('F1 score is', f1_score(y_pred, y_test))
         print('Accuracy score is', accuracy_score(y_pred, y_test))
+        print('Log-loss score is', log_loss(y_pred_proba_for_metrics, y_test))
         print('Confusion matrix is\n', confusion_matrix(y_pred, y_test))
 
     if type == 'logit':
@@ -240,6 +280,7 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         print(f'Logit MLE output for target {target} and features {features}.')
         print('F1 score is', f1_score(y_true=y_test, y_pred=logit_preds))
         print('Accuracy score is', accuracy_score(y_true=y_test, y_pred=logit_preds))
+        print('Log-loss score is', log_loss(y_true=y_test, y_pred=logit_probs))
         print('Confusion matrix is\n', confusion_matrix(y_true=y_test, y_pred=logit_preds))
 
 
@@ -247,9 +288,12 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         clf = GaussianNB()
         clf.fit(X=X_train, y=y_train)
         nb_preds = clf.predict(X=X_test)
+        nb_preds_proba = clf.predict_proba(X=X_test)
+        nb_preds_proba_for_metrics = [float(x) for x in nb_preds_proba[:, 1]]
         print(f'Gaussian Naive Bayes output for target {target} and features {features}.')
         print('F1 score is', f1_score(y_true=y_test, y_pred=nb_preds))
         print('Accuracy score is', accuracy_score(y_true=y_test, y_pred=nb_preds))
+        print('Log-loss score is', log_loss(y_true=y_test, y_pred=nb_preds_proba_for_metrics))
         print('Confusion matrix is\n', confusion_matrix(y_true=y_test, y_pred=nb_preds))
 
     return None
@@ -357,6 +401,7 @@ def mlp_model_process(df_train, df_test, features, target, model, epochs,
     print('Ran MLP model')
     print('Accuracy score is', accuracy_score(y_pred_for_scores, y_test))
     print('F1 score is', f1_score(y_pred_for_scores, y_test))
+    print('Log-loss score is', log_loss(y_pred, y_test))
 
     return df_out
 

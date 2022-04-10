@@ -44,7 +44,7 @@ df_test2 = pd.read_csv('Processed/df_test2.csv')
 features_closingline = ['hSpreadPoints'
                         ]
 
-features_spread = ['hSpreadPoints', 'home_spread_last10', 'away_spread_last10'
+features_spread = ['home_spread_last10', 'away_spread_last10' #,'hSpreadPoints'
             ]
 
 features_elo = [ 'home_elo_pre', 'home_elo_prob','away_elo_pre'
