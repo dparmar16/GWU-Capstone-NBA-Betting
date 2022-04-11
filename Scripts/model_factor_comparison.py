@@ -1,18 +1,22 @@
 import pandas as pd
 import os
 import sys
+import numpy as np
 # from tensorflow.keras.models import Sequential
 # from tensorflow.keras.layers import Dense
 # from tensorflow.keras.optimizers import Adadelta # SGD, RMSprop, Adam
 # from sklearn.neural_network import MLPClassifier
 # from sklearn.preprocessing import StandardScaler, LabelEncoder
-# from sklearn.metrics import confusion_matrix, roc_auc_score
+from sklearn.metrics import confusion_matrix, accuracy_score, f1_score
 
 # Import re-usable functions from utility folder
 toolbox_path = '../Utility_Functions'
 sys.path.append(toolbox_path)
 from functions import logistic_model_process, classical_model_process
-#
+
+pd.set_option('display.width', 200)
+pd.set_option('display.max_columns', 12)
+
 # Load train and test files
 os.chdir('../Data')
 
@@ -40,6 +44,40 @@ df_test2 = pd.read_csv('Processed/df_test2.csv')
 #             ,'hSpreadPoints', 'home_spread_last10', 'away_spread_last10', # Keep point spread in model as a feature as it is known prior to game and is valuable information
 #             'playoff_flag'
 #             ]
+
+
+# Test time series approach
+# FBprophet was way too slow so auto-arima was used
+arma = pd.read_csv('Processed/points_arma_predictions.csv')
+arma = arma[['id', 'teamId', 'points_arma']]
+base = pd.read_csv('Processed/base_file_for_model.csv')
+base = base[base['home_season_games_played'] >= 20]
+base = base[base['away_season_games_played'] >= 20]
+
+
+base = pd.merge(left=base, right=arma, left_on=['home_id', 'home_teamId'], right_on=['id', 'teamId'])
+base.rename(columns={'points_arma': 'home_points_arma'}, inplace=True)
+base = pd.merge(left=base, right=arma, left_on=['home_id', 'away_teamId'], right_on=['id', 'teamId'])
+base.rename(columns={'points_arma': 'away_points_arma'}, inplace=True)
+
+print(base[['home_points', 'away_points', 'home_points_arma', 'away_points_arma', 'home_result']].head(10))
+
+base['home_prediction_arma'] = np.where(base['home_points_arma'] >= base['away_points_arma'], 1, 0)
+
+print('ARMA on 20+ games played')
+print('Accuracy is: ', accuracy_score(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
+print('F1 score is: ', f1_score(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
+print('Confusion matrix is: ', confusion_matrix(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
+
+base = base[(base['home_season_games_played'] >= 50) & (base['home_season_games_played'] <= 82)]
+base = base[(base['away_season_games_played'] >= 50) & (base['away_season_games_played'] <= 82)]
+
+print('ARMA on 50-82 games played')
+print('Accuracy is: ', accuracy_score(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
+print('F1 score is: ', f1_score(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
+print('Confusion matrix is: ', confusion_matrix(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
+
+
 
 features_closingline = ['hSpreadPoints'
                         ]

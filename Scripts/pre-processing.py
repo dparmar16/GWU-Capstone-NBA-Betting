@@ -354,7 +354,8 @@ cols_to_keep = ['home_team_efg_shifted',
                                 'away_avg_2k_rating', 'away_weighted_avg_2k_rating', 'away_best_player_2k_rating', 'away_best_player_2k_rating',
                             'hH2h', 'vH2h', 'home_result', 'home_plusMinus','hSpreadPoints','hSpreadOdds', 'vSpreadOdds', 'home_id',
                              'home_spread_last10', 'away_spread_last10',
-                'home_season_games_played', 'away_season_games_played', 'home_seasonYear', 'home_startDate', 'playoff_flag', 'home_points', 'away_points']
+                'home_season_games_played', 'away_season_games_played', 'home_seasonYear', 'home_startDate', 'playoff_flag', 'home_points', 'away_points',
+                'home_teamId', 'away_teamId']
 
 
 final_df_for_mod = final_df[cols_to_keep]
