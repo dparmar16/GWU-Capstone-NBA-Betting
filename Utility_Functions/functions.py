@@ -208,7 +208,7 @@ def logistic_model_process(df_train, df_test, features, target, threshold=0.75):
     print(f'Logistic regression output for target {target} and features {features}.')
     print('F1 score is',f1_score(y_pred, y_test))
     print('Accuracy score is', accuracy_score(y_pred, y_test))
-    print('Log-loss score is', log_loss(y_test, y_pred_proba_for_metrics))
+    print('Log-loss score is', log_loss(y_true=y_test, y_pred=y_pred_proba_for_metrics))
     print('Confusion matrix is\n', confusion_matrix(y_pred, y_test))
 
     # Get relevant columns for output
@@ -267,7 +267,7 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         print(f'Logistic regression output for target {target} and features {features}.')
         print('F1 score is', f1_score(y_pred, y_test))
         print('Accuracy score is', accuracy_score(y_pred, y_test))
-        print('Log-loss score is', log_loss(y_pred_proba_for_metrics, y_test))
+        print('Log-loss score is', log_loss(y_true=y_test, y_pred=y_pred_proba_for_metrics))
         print('Confusion matrix is\n', confusion_matrix(y_pred, y_test))
 
     if type == 'logit':
@@ -377,9 +377,6 @@ def mlp_model_process(df_train, df_test, features, target, model, epochs,
     plt.legend()
     plt.show()
 
-    print('\n')
-
-
     # Get relevant columns for output
     df_out = df_test[['home_id', 'home_startDate', 'home_result', 'hH2h', 'vH2h']]
     # Plan is to use model prediction to compare to market prices
@@ -398,10 +395,11 @@ def mlp_model_process(df_train, df_test, features, target, model, epochs,
 
     # Print metrics
     y_pred_for_scores = np.where(y_pred >= 0.5, 1, 0)
+    y_pred_for_logloss = [float(x) for x in y_pred]
     print('Ran MLP model')
     print('Accuracy score is', accuracy_score(y_pred_for_scores, y_test))
     print('F1 score is', f1_score(y_pred_for_scores, y_test))
-    print('Log-loss score is', log_loss(y_pred, y_test))
+    print('Log-loss score is', log_loss(y_true=y_test, y_pred=y_pred_for_logloss))
 
     return df_out
 

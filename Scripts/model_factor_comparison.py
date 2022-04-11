@@ -2,17 +2,17 @@ import pandas as pd
 import os
 import sys
 import numpy as np
-# from tensorflow.keras.models import Sequential
-# from tensorflow.keras.layers import Dense
-# from tensorflow.keras.optimizers import Adadelta # SGD, RMSprop, Adam
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.optimizers import Adadelta # SGD, RMSprop, Adam
 # from sklearn.neural_network import MLPClassifier
 # from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.metrics import confusion_matrix, accuracy_score, f1_score
+from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, mean_squared_error
 
 # Import re-usable functions from utility folder
 toolbox_path = '../Utility_Functions'
 sys.path.append(toolbox_path)
-from functions import logistic_model_process, classical_model_process
+from functions import logistic_model_process, classical_model_process, mlp_model_process
 
 pd.set_option('display.width', 200)
 pd.set_option('display.max_columns', 12)
@@ -69,6 +69,9 @@ print('Accuracy is: ', accuracy_score(y_true=base['home_result'], y_pred=base['h
 print('F1 score is: ', f1_score(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
 print('Confusion matrix is: ', confusion_matrix(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
 
+print('Home RMSE is: ', mean_squared_error(y_true=base['home_points'], y_pred=base['home_points_arma'], squared=False)) # Approximate 12
+print('Away RMSE is: ', mean_squared_error(y_true=base['away_points'], y_pred=base['away_points_arma'], squared=False)) # Approximate 12
+
 base = base[(base['home_season_games_played'] >= 50) & (base['home_season_games_played'] <= 82)]
 base = base[(base['away_season_games_played'] >= 50) & (base['away_season_games_played'] <= 82)]
 
@@ -77,6 +80,8 @@ print('Accuracy is: ', accuracy_score(y_true=base['home_result'], y_pred=base['h
 print('F1 score is: ', f1_score(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
 print('Confusion matrix is: ', confusion_matrix(y_true=base['home_result'], y_pred=base['home_prediction_arma']))
 
+print('Home RMSE is: ', mean_squared_error(y_true=base['home_points'], y_pred=base['home_points_arma'], squared=False)) # Approximate 12
+print('Away RMSE is: ', mean_squared_error(y_true=base['away_points'], y_pred=base['away_points_arma'], squared=False)) # Approximate 12
 
 
 features_closingline = ['hSpreadPoints'
@@ -172,3 +177,37 @@ classical_model_process(df_train=df_train1, df_test=df_test1,
 
 classical_model_process(df_train=df_train1, df_test=df_test1,
                        features=features_pointdiff, target='home_result', type='naive-bayes', threshold=0.95)
+
+
+features_list = [
+[features_closingline, ['features_closingline']],
+[features_spread, ['features_spread']],
+[features_elo, ['features_elo']],
+[features_four_factors, ['features_four_factors']],
+[features_four_factors_ma, ['features_four_factors_ma']],
+[features_2k, ['features_2k']],
+[features_pointdiff, ['features_pointdiff']]
+]
+
+# Test neural network as well
+for feature_set in features_list:
+    features = feature_set[0]
+    feature_set_name = feature_set[1]
+    print(f'Running MLP for feature set: {feature_set_name}')
+    mod = Sequential()
+    mod.add(Dense(len(features), input_dim=len(features), activation='linear'))
+    mod.add(Dense(100, activation='linear'))
+    mod.add(Dense(50, activation='linear'))
+    mod.add(Dense(1, activation='sigmoid'))
+    opt = Adadelta(learning_rate=0.001, rho=0.7, epsilon=1e-08)
+    mod.compile(loss='binary_crossentropy', optimizer=opt, metrics=['accuracy'])
+
+    mlp_output1 = mlp_model_process(df_train=df_train1,
+                      df_test=df_test1,
+                      features=features,
+                      target='home_result',
+                      model=mod,
+                      epochs=2000,
+                      early_stopping=True,
+                      decorrelate=False,
+                      title=f'Model with {feature_set_name}')
