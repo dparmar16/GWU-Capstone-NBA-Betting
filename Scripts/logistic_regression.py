@@ -25,17 +25,42 @@ pd.set_option('display.max_columns', 12)
 os.chdir('../Data')
 df = pd.read_csv('Processed/base_file_for_model.csv')
 
-# Index(['home_team_efg_shifted', 'home_team_oreb_rate_shifted', 'home_team_ft_rate_shifted', 'home_team_to_rate_shifted', 'home_team_ha_efg_shifted', 'home_team_ha_oreb_rate_shifted',
-#        'home_team_ha_ft_rate_shifted', 'home_team_ha_to_rate_shifted', 'home_streak_entering', 'home_streak_entering_ha', 'home_days_rest', 'home_avg_point_differential_shifted',
-#        'home_avg_point_differential_ha_shifted', 'home_elo_pre', 'home_elo_prob', 'home_win_percentage_last10_shifted', 'home_win_percentage_ha_last10_shifted', 'home_b2b_flag',
-#        'home_avg_point_differential_last10_shifted', 'home_avg_point_differential_last10_ha_shifted', 'home_team_efg_ma_shifted', 'home_team_oreb_rate_ma_shifted', 'home_team_ft_rate_ma_shifted',
-#        'home_team_to_rate_ma_shifted', 'away_team_efg_shifted', 'away_team_oreb_rate_shifted', 'away_team_ft_rate_shifted', 'away_team_to_rate_shifted', 'away_team_ha_efg_shifted',
-#        'away_team_ha_oreb_rate_shifted', 'away_team_ha_ft_rate_shifted', 'away_team_ha_to_rate_shifted', 'away_streak_entering', 'away_streak_entering_ha', 'away_days_rest',
-#        'away_avg_point_differential_shifted', 'away_avg_point_differential_ha_shifted', 'away_elo_pre', 'away_elo_prob', 'away_win_percentage_last10_shifted', 'away_win_percentage_ha_last10_shifted',
-#        'away_b2b_flag', 'away_avg_point_differential_last10_shifted', 'away_avg_point_differential_last10_ha_shifted', 'away_team_efg_ma_shifted', 'away_team_oreb_rate_ma_shifted',
-#        'away_team_ft_rate_ma_shifted', 'away_team_to_rate_ma_shifted', 'hH2h', 'vH2h', 'home_result', 'home_plusMinus', 'hSpreadPoints', 'hSpreadOdds', 'vSpreadOdds', 'home_id',
-#        'home_season_games_played', 'away_season_games_played', 'home_seasonYear'],
-#       dtype='object')
+# Load train-test splits
+# Split 1 is earlier seasons and later seasons
+# Split 2 is first half/second half of all seasons
+# Split 3 is randomly shuffled
+df_train1 = pd.read_csv('Processed/df_train1.csv')
+df_test1 = pd.read_csv('Processed/df_test1.csv')
+df_train2 = pd.read_csv('Processed/df_train2.csv')
+df_test2 = pd.read_csv('Processed/df_test2.csv')
+df_train3 = pd.read_csv('Processed/df_train2.csv')
+df_test3 = pd.read_csv('Processed/df_test3.csv')
+
+# Get feature list
+features = ['home_team_efg_shifted','home_team_oreb_rate_shifted', 'home_team_ft_rate_shifted', 'home_team_to_rate_shifted',
+            'home_team_ha_efg_shifted', 'home_team_ha_oreb_rate_shifted', 'home_team_ha_ft_rate_shifted', 'home_team_ha_to_rate_shifted',
+            'home_streak_entering', 'home_streak_entering_ha', 'home_days_rest', 'home_avg_point_differential_shifted', 'home_avg_point_differential_ha_shifted',
+            'home_elo_pre', 'home_elo_prob',
+            'home_win_percentage_last10_shifted','home_win_percentage_ha_last10_shifted',
+            'home_b2b_flag',
+            'home_avg_point_differential_last10_shifted','home_avg_point_differential_last10_ha_shifted',
+            'home_team_efg_ma_shifted','home_team_oreb_rate_ma_shifted','home_team_ft_rate_ma_shifted','home_team_to_rate_ma_shifted',
+            'home_avg_2k_rating', 'home_weighted_avg_2k_rating', 'home_best_player_2k_rating',
+            'home_team_coef_unweighted', 'home_team_coef_weighted',
+            'home_spread_last10',
+            'away_team_efg_shifted', 'away_team_oreb_rate_shifted', 'away_team_ft_rate_shifted', 'away_team_to_rate_shifted',
+            'away_team_ha_efg_shifted', 'away_team_ha_oreb_rate_shifted', 'away_team_ha_ft_rate_shifted', 'away_team_ha_to_rate_shifted',
+            'away_streak_entering', 'away_streak_entering_ha', 'away_days_rest', 'away_avg_point_differential_shifted', 'away_avg_point_differential_ha_shifted',
+            'away_elo_pre',
+            'away_win_percentage_last10_shifted','away_win_percentage_ha_last10_shifted',
+            'away_b2b_flag',
+            'away_avg_point_differential_last10_shifted','away_avg_point_differential_last10_ha_shifted',
+            'away_team_efg_ma_shifted','away_team_oreb_rate_ma_shifted','away_team_ft_rate_ma_shifted','away_team_to_rate_ma_shifted',
+            'away_avg_2k_rating', 'away_weighted_avg_2k_rating', 'away_best_player_2k_rating',
+            'away_team_coef_unweighted', 'away_team_coef_weighted',
+            'away_spread_last10',
+            #'hSpreadPoints',
+            'playoff_flag']
 
 # Do exploratory data analysis on features that could be standardizated
 # All of these look somewhat normally distributed so we can do standard scaling
@@ -50,52 +75,6 @@ df = pd.read_csv('Processed/base_file_for_model.csv')
 #
 # plt.hist(df['home_elo_pre'], bins=50)
 # plt.show()
-
-# First train-test split is years
-df_train1 = df[(df['home_seasonYear'] == 2015) | (df['home_seasonYear'] == 2016) | (df['home_seasonYear'] == 2017)]
-df_test1 = df[(df['home_seasonYear'] == 2018) | (df['home_seasonYear'] == 2019)]
-# Write to csv to use in other models
-df_train1.to_csv('Processed/df_train1.csv', index_label=False)
-df_test1.to_csv('Processed/df_test1.csv', index_label=False)
-
-
-# Second train-test split is first half and second  half of the season
-# Get a sense of distribution (last season doesn't have games past 60 which explains shape)
-# Don't do 0-41 games since we removed first 10 games of season to avoid noisy statistics
-# plt.hist(df['home_season_games_played'], bins=110)
-# plt.show()
-# plt.hist(df['away_season_games_played'], bins=110)
-# plt.show()
-# Make sure to exclude playoffs in this one
-
-df_train2 = df[(df['home_season_games_played'] < 60) | (df['away_season_games_played'] < 60)]
-df_test2 = df[(df['home_season_games_played'] >= 60) & (df['away_season_games_played'] >= 60)
-              & (df['home_season_games_played'] < 83) & (df['away_season_games_played'] < 83)]
-# Write to csv to use in other models
-df_train2.to_csv('Processed/df_train2.csv', index_label=False)
-df_test2.to_csv('Processed/df_test2.csv', index_label=False)
-
-# Random split
-df_train3 = df.sample(frac=0.75)
-df_test3 = df.drop(df_train3.index)
-# Write to csv to use in other models
-df_train3.to_csv('Processed/df_train3.csv', index_label=False)
-df_test3.to_csv('Processed/df_test3.csv', index_label=False)
-
-# Get feature list
-features = ['home_team_efg_shifted', 'home_team_oreb_rate_shifted', 'home_team_ft_rate_shifted', 'home_team_to_rate_shifted', 'home_team_ha_efg_shifted', 'home_team_ha_oreb_rate_shifted',
-       'home_team_ha_ft_rate_shifted', 'home_team_ha_to_rate_shifted', 'home_streak_entering', 'home_streak_entering_ha', 'home_days_rest', 'home_avg_point_differential_shifted',
-       'home_avg_point_differential_ha_shifted', 'home_elo_pre', 'home_elo_prob', 'home_win_percentage_last10_shifted', 'home_win_percentage_ha_last10_shifted', 'home_b2b_flag',
-       'home_avg_point_differential_last10_shifted', 'home_avg_point_differential_last10_ha_shifted', 'home_team_efg_ma_shifted', 'home_team_oreb_rate_ma_shifted', 'home_team_ft_rate_ma_shifted',
-       'home_team_to_rate_ma_shifted', 'home_avg_2k_rating', 'home_weighted_avg_2k_rating', 'home_best_player_2k_rating',
-            'away_team_efg_shifted', 'away_team_oreb_rate_shifted', 'away_team_ft_rate_shifted', 'away_team_to_rate_shifted', 'away_team_ha_efg_shifted',
-       'away_team_ha_oreb_rate_shifted', 'away_team_ha_ft_rate_shifted', 'away_team_ha_to_rate_shifted', 'away_streak_entering', 'away_streak_entering_ha', 'away_days_rest',
-       'away_avg_point_differential_shifted', 'away_avg_point_differential_ha_shifted', 'away_elo_pre', 'away_win_percentage_last10_shifted', 'away_win_percentage_ha_last10_shifted',
-       'away_b2b_flag', 'away_avg_point_differential_last10_shifted', 'away_avg_point_differential_last10_ha_shifted', 'away_team_efg_ma_shifted', 'away_team_oreb_rate_ma_shifted',
-       'away_team_ft_rate_ma_shifted', 'away_team_to_rate_ma_shifted', 'away_avg_2k_rating', 'away_weighted_avg_2k_rating', 'away_best_player_2k_rating' # Keep comma in next line to easily remove spread if needed
-            ,'hSpreadPoints', 'home_spread_last10', 'away_spread_last10', # Keep point spread in model as a feature as it is known prior to game and is valuable information
-            'playoff_flag'
-            ]
 
 # Do PCA analysis
 #Fitting the PCA algorithm with our Data
@@ -209,36 +188,13 @@ print('Results readout 3')
 logistic_model_process(df_train=df_train3, df_test=df_test3,
                        features=features, target='home_result', threshold=0.8)
 
-# player ratings only logistic regression models - can use the four 2k columns
-# ensemble player ratings and fundamentals
-
-# Models
-# what is the train test logic split?
-# X_train, X_test, y_train_all, y_test_all = train_test_split(X, y, test_size=0.25,shuffle=True)
-# y_train = y_train_all['home_result']
-# y_test = y_test_all['home_result']
-
-# Logistic Regression
-# set basic logistic regression model and get accuracy metrics
-# for type in [['l1', 'liblinear'],['l1', 'saga'], ['l2', 'lbfgs'],['l2', 'newton-cg'], ['elasticnet', 'saga'], ['none', 'lbfgs']]:
-#    print('=' * 25)
-#    print(f'Running model with penalty {type[0]} and solver {type[1]}')
-#    basemod = LogisticRegression(penalty=type[0], solver=type[1], max_iter=200, l1_ratio=0.5)
-#    basemod.fit(X_train, y_train)
-#    #f1_score...
-#    print(basemod.get_params())
-#    print(basemod.score(X_test, y_test))
-#    y_pred = basemod.predict(X_test)
-#    print(confusion_matrix(y_pred, y_test))
-#    y_pred_proba = basemod.predict_proba(X_test)
-#    print(mean_squared_error([x[0] for x in y_pred_proba], y_test))
-#    print('=' * 25)
-
-
-# Linear Regression
-# set basic linear regression on home points and get accuracy points
-#X_train = X_train.drop(['hSpreadPoints'], axis=1)
-#X_test = X_test.drop(['hSpreadPoints'], axis=1)
+# Get to f1 score of over 75% on shuffled dataset when including closing line
+# F1 score is 0.7506024096385542
+# Accuracy score is 0.6854103343465046
+# Log-loss score is 0.6024870801478707
+# Confusion matrix is
+#  [[279 148]
+#  [266 623]]
 
 
 

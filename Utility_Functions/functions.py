@@ -7,14 +7,17 @@ import matplotlib.pyplot as plt
 import glob
 import re
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import confusion_matrix, f1_score, accuracy_score, log_loss
-from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.metrics import confusion_matrix, f1_score, accuracy_score, log_loss, brier_score_loss
+from sklearn.preprocessing import LabelEncoder, StandardScaler, MultiLabelBinarizer
 from tensorflow.keras.callbacks import EarlyStopping
 import statsmodels
 from statsmodels.discrete.discrete_model import Logit
 from sklearn.naive_bayes import GaussianNB
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf , plot_pacf
+from statsmodels.tools import add_constant
+from statsmodels.api import OLS, WLS
+
 
 
 import warnings
@@ -63,6 +66,10 @@ def ADF_Cal(x):
     for key, value in result[4].items():
         print('\t%s: %.3f' % (key, value))
 
+# The following functions are all related to Four Factors
+# The factors are effective field goal percentage, offensive rebounding rate,
+# free throw rate, and turnover rate
+# https://www.basketball-reference.com/about/factors.html
 def efg(fgm, fga, tpm):
     efg = (float(fgm) + 0.5 * float(tpm)) / float(fga)
     return efg
@@ -130,6 +137,9 @@ def american_converter_to_decimal(american):
     else:
         return (american / 100) + 1 # Plus odds
 
+# Function to apply Kelly Criterion
+# This is a financial concept that dictates how much capital to allocate to a wager
+# https://corporatefinanceinstitute.com/resources/knowledge/trading-investing/kelly-criterion/
 def kelly_criterion(model_prob_win, market_odds, multiplier=1, max=None):
     # First convert to decimal odds
     # But b in this function is market return, which is decimal - 1
@@ -200,22 +210,17 @@ def logistic_model_process(df_train, df_test, features, target, threshold=0.75):
 
     y_pred_proba_for_metrics = [float(x) for x in y_pred_proba[:, 1]]
 
-    # print(type(y_pred_proba))
-    # print(type(y_pred_proba[:, 1]))
-    # print(y_pred_proba[:, 1])
-    # print(y_pred_proba.dtype)
-
     print(f'Logistic regression output for target {target} and features {features}.')
     print('F1 score is',f1_score(y_pred, y_test))
     print('Accuracy score is', accuracy_score(y_pred, y_test))
     print('Log-loss score is', log_loss(y_true=y_test, y_pred=y_pred_proba_for_metrics))
+    print('Brier score loss is', brier_score_loss(y_true=y_test, y_prob=y_pred_proba_for_metrics))
     print('Confusion matrix is\n', confusion_matrix(y_pred, y_test))
 
     # Get relevant columns for output
     df_out = df_test[['home_id', 'home_startDate', 'home_result', 'hH2h', 'vH2h']]
     # Plan is to use model prediction to compare to market prices
     # Get predictions and attach to rest of relevant data
-    #y_pred_proba = basemod.predict_proba(X_test)
     df_out['logistic_pred_home'] = y_pred_proba[:, 1]
     df_out['logistic_pred_away'] = 1 - df_out['logistic_pred_home']
 
@@ -228,6 +233,11 @@ def logistic_model_process(df_train, df_test, features, target, threshold=0.75):
 
     return df_out
 
+
+
+# Function to run either logistic regression, naive bayes, or logit (probabilistic model)
+# This is helpful if we want to compare different models in succession
+# MLP is not covered as there is a different pre-processing needed for it
 def classical_model_process(df_train, df_test, features, target, type, threshold=0.75, pca=False):
 
     # If PCA is true, then return PCA features as way to reduce dimensionality
@@ -268,6 +278,7 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         print('F1 score is', f1_score(y_pred, y_test))
         print('Accuracy score is', accuracy_score(y_pred, y_test))
         print('Log-loss score is', log_loss(y_true=y_test, y_pred=y_pred_proba_for_metrics))
+        print('Brier score loss is', brier_score_loss(y_true=y_test, y_prob=y_pred_proba_for_metrics))
         print('Confusion matrix is\n', confusion_matrix(y_pred, y_test))
 
     if type == 'logit':
@@ -281,6 +292,7 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         print('F1 score is', f1_score(y_true=y_test, y_pred=logit_preds))
         print('Accuracy score is', accuracy_score(y_true=y_test, y_pred=logit_preds))
         print('Log-loss score is', log_loss(y_true=y_test, y_pred=logit_probs))
+        print('Brier score loss is', log_loss(y_true=y_test, y_prob=logit_probs))
         print('Confusion matrix is\n', confusion_matrix(y_true=y_test, y_pred=logit_preds))
 
 
@@ -294,6 +306,7 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         print('F1 score is', f1_score(y_true=y_test, y_pred=nb_preds))
         print('Accuracy score is', accuracy_score(y_true=y_test, y_pred=nb_preds))
         print('Log-loss score is', log_loss(y_true=y_test, y_pred=nb_preds_proba_for_metrics))
+        print('Brier score loss is', log_loss(y_true=y_test, y_prob=nb_preds_proba_for_metrics))
         print('Confusion matrix is\n', confusion_matrix(y_true=y_test, y_pred=nb_preds))
 
     return None
@@ -400,8 +413,120 @@ def mlp_model_process(df_train, df_test, features, target, model, epochs,
     print('Accuracy score is', accuracy_score(y_pred_for_scores, y_test))
     print('F1 score is', f1_score(y_pred_for_scores, y_test))
     print('Log-loss score is', log_loss(y_true=y_test, y_pred=y_pred_for_logloss))
+    print('Brier score loss is', brier_score_loss(y_true=y_test, y_prob=y_pred_for_logloss))
 
     return df_out
+
+# Calculate team strength using point spreads
+# This will be a feature in the model
+def team_strength_spread(df, weighted=False, drop_constant=True):
+    '''
+
+    :param df: Dataframe of all the games in our dataset
+    :param weighted: Created weighted linear regression, with recent games betting more weight
+    :param drop_constant: Flag to decide whether to drop home court advantage coefficient in output
+    :return: team_coef_df: Dataframe of team's strength coefficient at any given game date in the season
+    '''
+
+    # Keep only the relevant columns used below
+    df = df[['home_startDate', 'home_teamId', 'away_teamId', 'hSpreadPoints', 'home_seasonYear', 'playoff_flag']]
+
+    # Need to zip home and away team id to set up multi-label encoding
+    # If team 1 is playing team 2, get [1, 2]
+    df['both_teams'] = [[x, y] for x, y in zip(df.home_teamId, df.away_teamId)]
+
+    # Create empty list to append with the team coefficients, will later turn this to dataframe
+    team_coef_list = []
+
+    # Need to get season values to loop through for output
+    season_values = df['home_seasonYear'].unique()
+
+    for season in season_values:
+        # Filter to an individual season
+        df_season = df[df['home_seasonYear'] == season]
+        # Get all unique dates in that season to filter date up to a given day
+        season_dates = np.sort(df_season['home_startDate'].unique())
+        for date_until in season_dates:
+            # Keep only games up to that date in the season
+            # Can't use future games as data in the model
+            df_date = df_season[df_season['home_startDate'] <= date_until]
+
+            # Zip home and away team to do multi-label binarizer (i.e. get [1, 3] when team 1 plays team 3]
+            df_date['both_teams'] = [[x, y] for x, y in zip(df_date.home_teamId, df_date.away_teamId)]
+
+            # If using weighted OLS, get weights
+            # Weight will be decayed based on how far back game was from most recent date
+            # Use Euler's number (e) for this process
+            if weighted:
+                date_diffs = (pd.to_datetime(date_until) - pd.to_datetime(df_date['home_startDate'])).dt.days
+                weight_array = [x for x in np.exp(-1 * date_diffs / 100)]
+
+            # Encode team values, so if team 1 plays team 3
+            # team1 team2 team3
+            #   1     0     1
+            mlb = MultiLabelBinarizer()
+            mlb.fit(df_date['both_teams'])
+            col_names = [str(x) for x in mlb.classes_]
+            encoded = pd.DataFrame(mlb.fit_transform(df_date['both_teams']), columns=col_names)
+
+            mod_df_pre = pd.concat([df_date.reset_index(drop=True), encoded.reset_index(drop=True)], axis=1)
+
+            # flip to negative for home team since negative number means home team is stronger
+            # ie. home team id is 10 so mod_df_pre[str(10)] = -1 * value (1)
+            # ie. home team id is 25 so mod_df_pre[str(25)] = -1 * value (1)
+            for idx, row in mod_df_pre.iterrows():
+                home_team_value = row['home_teamId']
+                mod_df_pre.loc[idx, f'{str(home_team_value)}'] = -1
+
+            # ID values are no longer relevant once we have set up the regression model
+            mod_df_pre.drop([
+                'home_teamId',
+                'away_teamId',
+                'home_seasonYear',
+                'both_teams',
+                'home_startDate'], axis=1, inplace=True)
+
+            mod_df = add_constant(mod_df_pre, prepend=False, has_constant='add')
+            Y = mod_df['hSpreadPoints']
+            X = mod_df.drop(['hSpreadPoints', 'playoff_flag'], axis=1)  # Can choose to add playoff flag later
+
+            # Add constant for home court advantage and do OLS regression since spread is continuous varible
+            # OLS coefficients refer to how each team impacts the spread
+            # team1 team2 team3 const    y
+            #   1     0     1    1      -5
+
+            # Only difference between weighted and normal is weight array generated above
+            if weighted:
+                mod_weighted = WLS(Y, X, weights=weight_array)
+                results = mod_weighted.fit()
+                params_series = results.params
+
+            else:
+                mod = OLS(Y, X)
+                results = mod.fit()
+                params_series = results.params
+
+
+            # season, date, team id, coefficient
+            for i, v in params_series.items():
+                team_coef_list.append([season, date_until, i, v])
+
+    # Name coefficient column differently based on the regression type done above
+    if weighted:
+        team_coef_df = pd.DataFrame(team_coef_list, columns=['season', 'date', 'teamId', 'team_coef_weighted'])
+    else:
+        team_coef_df = pd.DataFrame(team_coef_list, columns=['season', 'date', 'teamId', 'team_coef_unweighted'])
+
+    # If drop constant, remove the "const" values to just keep team coefficients
+    # Constant is kept in every regression and therefore serves to value home court advantage
+    if drop_constant:
+        team_coef_df = team_coef_df[team_coef_df['teamId'] != 'const']
+
+    # Turn teamId from string to integer for merging purposes
+    team_coef_df['teamId'] = pd.to_numeric(team_coef_df['teamId'])
+
+
+    return team_coef_df
 
 # Group columns values into a list
 # https://stackoverflow.com/questions/22219004/how-to-group-dataframe-rows-into-list-in-pandas-groupby/66018377#66018377

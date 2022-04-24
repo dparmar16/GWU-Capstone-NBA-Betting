@@ -27,19 +27,30 @@ df_test3 = pd.read_csv('Processed/df_test3.csv')
 
 # Get features created in pre-processing
 # No need to remove correlated features because MLP can handle this
-features = ['home_team_efg_shifted', 'home_team_oreb_rate_shifted', 'home_team_ft_rate_shifted', 'home_team_to_rate_shifted', 'home_team_ha_efg_shifted', 'home_team_ha_oreb_rate_shifted',
-       'home_team_ha_ft_rate_shifted', 'home_team_ha_to_rate_shifted', 'home_streak_entering', 'home_streak_entering_ha', 'home_days_rest', 'home_avg_point_differential_shifted',
-       'home_avg_point_differential_ha_shifted', 'home_elo_pre', 'home_elo_prob', 'home_win_percentage_last10_shifted', 'home_win_percentage_ha_last10_shifted', 'home_b2b_flag',
-       'home_avg_point_differential_last10_shifted', 'home_avg_point_differential_last10_ha_shifted', 'home_team_efg_ma_shifted', 'home_team_oreb_rate_ma_shifted', 'home_team_ft_rate_ma_shifted',
-       'home_team_to_rate_ma_shifted', 'home_avg_2k_rating', 'home_weighted_avg_2k_rating', 'home_best_player_2k_rating',
-            'away_team_efg_shifted', 'away_team_oreb_rate_shifted', 'away_team_ft_rate_shifted', 'away_team_to_rate_shifted', 'away_team_ha_efg_shifted',
-       'away_team_ha_oreb_rate_shifted', 'away_team_ha_ft_rate_shifted', 'away_team_ha_to_rate_shifted', 'away_streak_entering', 'away_streak_entering_ha', 'away_days_rest',
-       'away_avg_point_differential_shifted', 'away_avg_point_differential_ha_shifted', 'away_elo_pre', 'away_win_percentage_last10_shifted', 'away_win_percentage_ha_last10_shifted',
-       'away_b2b_flag', 'away_avg_point_differential_last10_shifted', 'away_avg_point_differential_last10_ha_shifted', 'away_team_efg_ma_shifted', 'away_team_oreb_rate_ma_shifted',
-       'away_team_ft_rate_ma_shifted', 'away_team_to_rate_ma_shifted', 'away_avg_2k_rating', 'away_weighted_avg_2k_rating', 'away_best_player_2k_rating' # Keep comma in next line to easily remove spread if needed
-            ,'hSpreadPoints', 'home_spread_last10', 'away_spread_last10', # Keep point spread in model as a feature as it is known prior to game and is valuable information
-            'playoff_flag'
-            ]
+features = ['home_team_efg_shifted','home_team_oreb_rate_shifted', 'home_team_ft_rate_shifted', 'home_team_to_rate_shifted',
+            'home_team_ha_efg_shifted', 'home_team_ha_oreb_rate_shifted', 'home_team_ha_ft_rate_shifted', 'home_team_ha_to_rate_shifted',
+            'home_streak_entering', 'home_streak_entering_ha', 'home_days_rest', 'home_avg_point_differential_shifted', 'home_avg_point_differential_ha_shifted',
+            'home_elo_pre', 'home_elo_prob',
+            'home_win_percentage_last10_shifted','home_win_percentage_ha_last10_shifted',
+            'home_b2b_flag',
+            'home_avg_point_differential_last10_shifted','home_avg_point_differential_last10_ha_shifted',
+            'home_team_efg_ma_shifted','home_team_oreb_rate_ma_shifted','home_team_ft_rate_ma_shifted','home_team_to_rate_ma_shifted',
+            'home_avg_2k_rating', 'home_weighted_avg_2k_rating', 'home_best_player_2k_rating',
+            'home_team_coef_unweighted', 'home_team_coef_weighted',
+            'home_spread_last10',
+            'away_team_efg_shifted', 'away_team_oreb_rate_shifted', 'away_team_ft_rate_shifted', 'away_team_to_rate_shifted',
+            'away_team_ha_efg_shifted', 'away_team_ha_oreb_rate_shifted', 'away_team_ha_ft_rate_shifted', 'away_team_ha_to_rate_shifted',
+            'away_streak_entering', 'away_streak_entering_ha', 'away_days_rest', 'away_avg_point_differential_shifted', 'away_avg_point_differential_ha_shifted',
+            'away_elo_pre',
+            'away_win_percentage_last10_shifted','away_win_percentage_ha_last10_shifted',
+            'away_b2b_flag',
+            'away_avg_point_differential_last10_shifted','away_avg_point_differential_last10_ha_shifted',
+            'away_team_efg_ma_shifted','away_team_oreb_rate_ma_shifted','away_team_ft_rate_ma_shifted','away_team_to_rate_ma_shifted',
+            'away_avg_2k_rating', 'away_weighted_avg_2k_rating', 'away_best_player_2k_rating',
+            'away_team_coef_unweighted', 'away_team_coef_weighted',
+            'away_spread_last10',
+            #'hSpreadPoints',
+            'playoff_flag']
 
 # # Model 1
 # # Create model using tensorflow and keras
@@ -133,11 +144,9 @@ features = ['home_team_efg_shifted', 'home_team_oreb_rate_shifted', 'home_team_f
 mod = Sequential()
 mod.add(Dense(len(features), input_dim=len(features), activation='linear'))
 mod.add(Dense(100, activation='linear'))
-#mod.add(Dense(100, activation='linear'))
 mod.add(Dense(50, activation='linear'))
 mod.add(Dense(1, activation='sigmoid'))
 opt = Adadelta(learning_rate=0.001, rho=0.7, epsilon=1e-08)
-#opt = SGD(learning_rate=0.01, momentum=0.1, nesterov=False)
 mod.compile(loss='binary_crossentropy', optimizer=opt, metrics=['accuracy'])
 
 mlp_output1 = mlp_model_process(df_train=df_train1,

@@ -6,7 +6,7 @@ import sys
 
 toolbox_path = '../Utility_Functions'
 sys.path.append(toolbox_path)
-from functions import efg, oreb_rate, ft_rate, to_rate, four_factors_averages, f_multi
+from functions import efg, oreb_rate, ft_rate, to_rate, four_factors_averages, f_multi, team_strength_spread
 
 import warnings
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -184,14 +184,6 @@ gst = pd.merge(gst, four_factors_baseline_df, left_on=['previous_seasonYear'], r
 
 gst.to_csv('Processed/gst_all_columns.csv', index_label=False)
 
-
-# gst_features = gst[['id', 'teamId', 'home_flag', 'result', 'plusMinus', 'seasonYear', 'startDate', 'season_games_played', 'season_ha_games_played',
-#                     'team_efg','team_oreb_rate','team_ft_rate','team_to_rate', 'team_ha_efg','team_ha_oreb_rate','team_ha_ft_rate','team_ha_to_rate']]
-#
-#
-# gst_features_home = gst_features[gst_features['home_flag'] == 1]
-# gst_features_away = gst_features[gst_features['home_flag'] == 0]
-
 gst_features = gst[['id', 'teamId', 'home_flag', 'plusMinus','result','seasonYear', 'startDate', 'season_games_played', 'season_ha_games_played',
                     'team_efg_shifted','team_oreb_rate_shifted','team_ft_rate_shifted','team_to_rate_shifted',
                     'team_efg_ma_shifted','team_oreb_rate_ma_shifted','team_ft_rate_ma_shifted','team_to_rate_ma_shifted',
@@ -298,10 +290,7 @@ combined_spread_points = pd.concat([home_spread_points.rename(columns={'hTeamId'
                                     away_spread_points.rename(columns={'vTeamId':'teamId', 'vSpreadPoints':'spread'})], ignore_index=True)
 combined_spread_points.sort_values(by=['commenceDate', 'teamId'], inplace=True)
 combined_spread_points['spread_last10'] = combined_spread_points.groupby(by=['seasonYear','teamId'])['spread'].transform(lambda x: x.rolling(10, 1).mean())
-#print(combined_spread_points.head(20))
-#print(combined_spread_points.tail(20))
 combined_spread_points = combined_spread_points[['id', 'teamId', 'spread_last10']]
-#print(combined_spread_points.head(20))
 
 
 # Remove sample that
@@ -333,6 +322,21 @@ final_df = pd.merge(final_df, games_playoff_flag,
                     right_on=['id'],
                     how='inner')
 
+# Get team coefficients using spreads
+# Using both weighted (more weight to recent games) and standard OLS estimate
+# Will drop constant (as this measures home court advantage and doesn't refer to any team)
+team_coef_unweighted = team_strength_spread(final_df, weighted=False, drop_constant=True)
+team_coef_weighted = team_strength_spread(final_df, weighted=True, drop_constant=True)
+
+final_df = pd.merge(final_df, team_coef_unweighted, left_on=['home_startDate', 'home_teamId'], right_on=['date', 'teamId'])
+final_df.rename(columns={'team_coef_unweighted': 'home_team_coef_unweighted'}, inplace=True)
+final_df = pd.merge(final_df, team_coef_unweighted, left_on=['home_startDate', 'away_teamId'], right_on=['date', 'teamId'])
+final_df.rename(columns={'team_coef_unweighted': 'away_team_coef_unweighted'}, inplace=True)
+final_df = pd.merge(final_df, team_coef_weighted, left_on=['home_startDate', 'home_teamId'], right_on=['date', 'teamId'])
+final_df.rename(columns={'team_coef_weighted': 'home_team_coef_weighted'}, inplace=True)
+final_df = pd.merge(final_df, team_coef_weighted, left_on=['home_startDate', 'away_teamId'], right_on=['date', 'teamId'])
+final_df.rename(columns={'team_coef_weighted': 'away_team_coef_weighted'}, inplace=True)
+
 cols_to_keep = ['home_team_efg_shifted',
                                'home_team_oreb_rate_shifted', 'home_team_ft_rate_shifted', 'home_team_to_rate_shifted',
                                'home_team_ha_efg_shifted', 'home_team_ha_oreb_rate_shifted', 'home_team_ha_ft_rate_shifted',
@@ -342,7 +346,8 @@ cols_to_keep = ['home_team_efg_shifted',
                              'home_win_percentage_last10_shifted','home_win_percentage_ha_last10_shifted','home_b2b_flag',
                                'home_avg_point_differential_last10_shifted','home_avg_point_differential_last10_ha_shifted',
                              'home_team_efg_ma_shifted','home_team_oreb_rate_ma_shifted','home_team_ft_rate_ma_shifted','home_team_to_rate_ma_shifted',
-                                'home_avg_2k_rating', 'home_weighted_avg_2k_rating', 'home_best_player_2k_rating', 'home_best_player_2k_rating',
+                                'home_avg_2k_rating', 'home_weighted_avg_2k_rating', 'home_best_player_2k_rating',
+                                'home_team_coef_unweighted', 'home_team_coef_weighted',
                                'away_team_efg_shifted',
                                'away_team_oreb_rate_shifted', 'away_team_ft_rate_shifted', 'away_team_to_rate_shifted', 'away_team_ha_efg_shifted',
                                'away_team_ha_oreb_rate_shifted', 'away_team_ha_ft_rate_shifted', 'away_team_ha_to_rate_shifted',
@@ -351,15 +356,46 @@ cols_to_keep = ['home_team_efg_shifted',
                              'away_win_percentage_last10_shifted','away_win_percentage_ha_last10_shifted','away_b2b_flag',
                                'away_avg_point_differential_last10_shifted','away_avg_point_differential_last10_ha_shifted',
                              'away_team_efg_ma_shifted','away_team_oreb_rate_ma_shifted','away_team_ft_rate_ma_shifted','away_team_to_rate_ma_shifted',
-                                'away_avg_2k_rating', 'away_weighted_avg_2k_rating', 'away_best_player_2k_rating', 'away_best_player_2k_rating',
+                                'away_avg_2k_rating', 'away_weighted_avg_2k_rating', 'away_best_player_2k_rating',
                             'hH2h', 'vH2h', 'home_result', 'home_plusMinus','hSpreadPoints','hSpreadOdds', 'vSpreadOdds', 'home_id',
                              'home_spread_last10', 'away_spread_last10',
+                'away_team_coef_unweighted', 'away_team_coef_weighted',
                 'home_season_games_played', 'away_season_games_played', 'home_seasonYear', 'home_startDate', 'playoff_flag', 'home_points', 'away_points',
                 'home_teamId', 'away_teamId']
 
 
 final_df_for_mod = final_df[cols_to_keep]
+final_df_for_mod.to_csv('Processed/base_file_for_model.csv', index=False)
+
+# Create separate train-test splits to use for our models
+# First train-test split is years
+# The idea here is that we could train a model over a few years and use in future years
+df_train1 = final_df_for_mod[(final_df_for_mod['home_seasonYear'] == 2015) | (final_df_for_mod['home_seasonYear'] == 2016) | (final_df_for_mod['home_seasonYear'] == 2017)]
+df_test1 = final_df_for_mod[(final_df_for_mod['home_seasonYear'] == 2018) | (final_df_for_mod['home_seasonYear'] == 2019)]
+# Write to csv to use in other models
+df_train1.to_csv('Processed/df_train1.csv', index_label=False, index=False)
+df_test1.to_csv('Processed/df_test1.csv', index_label=False, index=False)
 
 
-final_df_for_mod.to_csv('Processed/base_file_for_model.csv', index_label=False)
+# Second train-test split is first half and second  half of the season
+# Get a sense of distribution (last season doesn't have games past 60 which explains shape)
+# Don't do 0-41 games since we removed first 10 games of season to avoid noisy statistics
+# plt.hist(df['home_season_games_played'], bins=110)
+# plt.show()
+# plt.hist(df['away_season_games_played'], bins=110)
+# plt.show()
+# Make sure to exclude playoffs in this one
 
+df_train2 = final_df_for_mod[(final_df_for_mod['home_season_games_played'] < 60) | (final_df_for_mod['away_season_games_played'] < 60)]
+df_test2 = final_df_for_mod[(final_df_for_mod['home_season_games_played'] >= 60) & (final_df_for_mod['away_season_games_played'] >= 60)
+              & (final_df_for_mod['home_season_games_played'] < 83) & (final_df_for_mod['away_season_games_played'] < 83)]
+# Write to csv to use in other models
+df_train2.to_csv('Processed/df_train2.csv', index_label=False, index=False)
+df_test2.to_csv('Processed/df_test2.csv', index_label=False, index=False)
+
+# Random split
+df_train3 = final_df_for_mod.sample(frac=0.75, random_state=408)
+df_test3 = final_df_for_mod.drop(df_train3.index)
+# Write to csv to use in other models
+df_train3.to_csv('Processed/df_train3.csv', index_label=False, index=False)
+df_test3.to_csv('Processed/df_test3.csv', index_label=False, index=False)
