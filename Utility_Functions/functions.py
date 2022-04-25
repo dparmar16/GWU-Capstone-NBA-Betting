@@ -281,6 +281,22 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         print('Brier score loss is', brier_score_loss(y_true=y_test, y_prob=y_pred_proba_for_metrics))
         print('Confusion matrix is\n', confusion_matrix(y_pred, y_test))
 
+        # Get relevant columns for output
+        df_out = df_test[['home_id', 'home_startDate', 'home_result', 'hH2h', 'vH2h']]
+        # Plan is to use model prediction to compare to market prices
+        # Get predictions and attach to rest of relevant data
+        df_out['logistic_pred_home'] = y_pred_proba[:, 1]
+        df_out['logistic_pred_away'] = 1 - df_out['logistic_pred_home']
+
+        # Also want implied probability of winning given by odds to compare to our model
+        df_out['home_implied_prob'] = df_out['hH2h'].map(lambda x: odds_to_implied_prob(x))
+        df_out['away_implied_prob'] = df_out['vH2h'].map(lambda x: odds_to_implied_prob(x))
+
+        # Sort by date
+        df_out.sort_values(by='home_startDate', axis=0, ascending=True, inplace=True)
+
+        return df_out
+
     if type == 'logit':
         X_train1 = statsmodels.tools.add_constant(X_train, has_constant='add')
         logit_mod = Logit(endog=y_train, exog=X_train1)
@@ -292,8 +308,24 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         print('F1 score is', f1_score(y_true=y_test, y_pred=logit_preds))
         print('Accuracy score is', accuracy_score(y_true=y_test, y_pred=logit_preds))
         print('Log-loss score is', log_loss(y_true=y_test, y_pred=logit_probs))
-        print('Brier score loss is', log_loss(y_true=y_test, y_prob=logit_probs))
+        print('Brier score loss is', brier_score_loss(y_true=y_test, y_prob=logit_probs))
         print('Confusion matrix is\n', confusion_matrix(y_true=y_test, y_pred=logit_preds))
+
+        # Get relevant columns for output
+        df_out = df_test[['home_id', 'home_startDate', 'home_result', 'hH2h', 'vH2h']]
+        # Plan is to use model prediction to compare to market prices
+        # Get predictions and attach to rest of relevant data
+        df_out['logit_mle_pred_home'] = logit_probs
+        df_out['logit_mle_pred_away'] = 1 - df_out['logit_mle_pred_home']
+
+        # Also want implied probability of winning given by odds to compare to our model
+        df_out['home_implied_prob'] = df_out['hH2h'].map(lambda x: odds_to_implied_prob(x))
+        df_out['away_implied_prob'] = df_out['vH2h'].map(lambda x: odds_to_implied_prob(x))
+
+        # Sort by date
+        df_out.sort_values(by='home_startDate', axis=0, ascending=True, inplace=True)
+
+        return df_out
 
 
     if type == 'naive-bayes':
@@ -306,17 +338,32 @@ def classical_model_process(df_train, df_test, features, target, type, threshold
         print('F1 score is', f1_score(y_true=y_test, y_pred=nb_preds))
         print('Accuracy score is', accuracy_score(y_true=y_test, y_pred=nb_preds))
         print('Log-loss score is', log_loss(y_true=y_test, y_pred=nb_preds_proba_for_metrics))
-        print('Brier score loss is', log_loss(y_true=y_test, y_prob=nb_preds_proba_for_metrics))
+        print('Brier score loss is', brier_score_loss(y_true=y_test, y_prob=nb_preds_proba_for_metrics))
         print('Confusion matrix is\n', confusion_matrix(y_true=y_test, y_pred=nb_preds))
 
-    return None
+        # Get relevant columns for output
+        df_out = df_test[['home_id', 'home_startDate', 'home_result', 'hH2h', 'vH2h']]
+        # Plan is to use model prediction to compare to market prices
+        # Get predictions and attach to rest of relevant data
+        df_out['nb_pred_home'] = nb_preds_proba_for_metrics
+        df_out['nb_pred_away'] = 1 - df_out['nb_pred_home']
+
+        # Also want implied probability of winning given by odds to compare to our model
+        df_out['home_implied_prob'] = df_out['hH2h'].map(lambda x: odds_to_implied_prob(x))
+        df_out['away_implied_prob'] = df_out['vH2h'].map(lambda x: odds_to_implied_prob(x))
+
+        # Sort by date
+        df_out.sort_values(by='home_startDate', axis=0, ascending=True, inplace=True)
+
+        return df_out
 
 # Function to run MLP model given data, features, target, and model parameters
 # Returns model metrics such as:
 # 1) loss function (binary cross entropy)
 # 2) performance metric (accuracy)
 def mlp_model_process(df_train, df_test, features, target, model, epochs,
-                      early_stopping=True, decorrelate=False, threshold=0.75, title=None):
+                      early_stopping=True, decorrelate=False, threshold=0.75, title=None,
+                      ):
     # Take feature columns for our X train matrix
     # No need to drop due to multi-collinearity
     # Use all features available
