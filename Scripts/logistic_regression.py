@@ -171,6 +171,8 @@ feature_importance_sorted = pd.DataFrame(list(zip(x_cols_kept,feature_importance
 feature_importance_sorted.sort_values(by=['feature_importance_vals'],ascending=False,inplace=True)
 plt.bar(feature_importance_sorted['col_name'],feature_importance_sorted['feature_importance_vals'])
 plt.xticks(rotation=90)
+plt.ylabel('SHAP Mean Value')
+plt.title('SHAP Feature Importance Sorted after Dimensionality Reduction')
 plt.tight_layout()
 plt.show()
 
