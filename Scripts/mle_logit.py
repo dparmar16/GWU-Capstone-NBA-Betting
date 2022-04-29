@@ -3,7 +3,7 @@ import os
 import numpy as np
 import sys
 import statsmodels.tools
-from sklearn.metrics import confusion_matrix, accuracy_score, f1_score
+from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, log_loss, brier_score_loss
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from statsmodels.discrete.discrete_model import Logit, Probit
 from sklearn.naive_bayes import GaussianNB
@@ -76,6 +76,7 @@ y_test1 = le.transform(y_test1)
 
 
 # Statsmodels - Logit
+print('Running Logit for Train/Test Split 1')
 print(x_cols_kept)
 X_train1 = statsmodels.tools.add_constant(X_train1, has_constant='add')
 logit_mod = Logit(endog=y_train1, exog=X_train1)
@@ -84,9 +85,17 @@ X_test1 = statsmodels.tools.add_constant(X_test1, has_constant='add')
 logit_probs = logit_result.predict(X_test1)
 logit_preds = np.where(logit_probs >= 0.5, 1, 0)
 
+print('Metrics for Train/Test Split 1 with Logit model')
+print('Confusion matrix')
 print(confusion_matrix(y_true=y_test1, y_pred=logit_preds))
+print('Accuracy')
 print(accuracy_score(y_true=y_test1, y_pred=logit_preds))
+print('F1')
 print(f1_score(y_true=y_test1, y_pred=logit_preds))
+print('Log loss')
+print(log_loss(y_true=y_test1, y_pred=logit_probs))
+print('Brier score loss')
+print(brier_score_loss(y_true=y_test1, y_prob=logit_probs))
 
 # Statsmodels - Probit
 probit_mod = Probit(endog=y_train1, exog=X_train1)
@@ -101,13 +110,26 @@ print(f1_score(y_true=y_test1, y_pred=probit_preds))
 
 
 # Naive Bayes
+print('Running Gaussian NB on Train/Test Split 1')
 clf = GaussianNB()
 clf.fit(X=X_train1, y=y_train1)
 nb_preds = clf.predict(X=X_test1)
+nb_probs = clf.predict_proba(X=X_test1)[: , 1]
 print(confusion_matrix(y_true=y_test1, y_pred=nb_preds))
 print(accuracy_score(y_true=y_test1, y_pred=nb_preds))
 print(f1_score(y_true=y_test1, y_pred=nb_preds))
 
+print('Metrics for Train/Test Split 1 with NB model')
+print('Confusion matrix')
+print(confusion_matrix(y_true=y_test1, y_pred=nb_preds))
+print('Accuracy')
+print(accuracy_score(y_true=y_test1, y_pred=nb_preds))
+print('F1')
+print(f1_score(y_true=y_test1, y_pred=nb_preds))
+print('Log loss')
+print(log_loss(y_true=y_test1, y_pred=nb_probs))
+print('Brier score loss')
+print(brier_score_loss(y_true=y_test1, y_prob=nb_probs))
 
 # Every possible model hitting between 66-68 percent
 # It's not the model, it's the features going into it
