@@ -3,12 +3,13 @@ import pandas as pd
 import os
 import numpy as np
 import sys
-from sklearn.model_selection import train_test_split
+#from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix, f1_score
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
+import seaborn as sns
 # from matplotlib import colors
 
 # Import re-usable functions from utility folder
@@ -82,6 +83,7 @@ x_scaled = StandardScaler().fit_transform(df_train1[features])
 pca = PCA().fit(x_scaled)
 #Plotting the Cumulative Summation of the Explained Variance
 plt.figure()
+sns.set(font_scale = 1, style='white')
 plt.plot(np.cumsum(pca.explained_variance_ratio_))
 plt.xlabel('Number of Components')
 plt.ylabel('Variance (%)') #for each component
@@ -90,11 +92,31 @@ plt.show()
 
 # Take feature columns for our X train matrix
 X_train1 = df_train1[features]
+
+# Check correlation on all features
+df_corr = pd.DataFrame(X_train1).corr(method='pearson')
+sns.set(font_scale = 0.5)
+corr_plot1 = sns.heatmap(df_corr, annot=False)
+corr_plot1.set_xticklabels(corr_plot1.get_xticklabels(),rotation = 90)
+corr_plot1.set_yticklabels(corr_plot1.get_yticklabels(),rotation = 0)
+corr_plot1.set_title("Correlation Plot with All Features", fontsize = 15)
+plt.tight_layout()
+plt.show()
+
 # Remove correlated features to reduce multicollinearity in linear model
 X_train1, x_cols_kept = correlation_reduction(X_train1, threshold=0.8)
 # Spot check matrix to make sure there aren't any high thresholds remaining
 print('Correlation check after feature reduction')
 print(pd.DataFrame(X_train1).corr(method='pearson'))
+
+df_corr_reduced = pd.DataFrame(X_train1).corr(method='pearson')
+corr_plot2 = sns.heatmap(df_corr_reduced, annot=False)
+corr_plot2.set_xticklabels(corr_plot2.get_xticklabels(),rotation = 90)
+corr_plot2.set_yticklabels(corr_plot2.get_yticklabels(),rotation = 0)
+corr_plot2.set_title("Correlation Plot with Reduced Features", fontsize = 15)
+plt.tight_layout()
+plt.show()
+
 # Standardize (set to mean of 0 and standard deviation of 1) for all features
 ss = StandardScaler()
 ss.fit(X_train1)
@@ -104,6 +126,7 @@ X_train1 = ss.transform(X_train1)
 pca = PCA().fit(X_train1)
 #Plotting the Cumulative Summation of the Explained Variance
 plt.figure()
+sns.set(font_scale=1, style='white')
 plt.plot(np.cumsum(pca.explained_variance_ratio_))
 plt.xlabel('Number of Components')
 plt.ylabel('Variance (%)') #for each component
