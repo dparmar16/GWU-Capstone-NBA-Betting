@@ -15,7 +15,7 @@ from sklearn.metrics import confusion_matrix, accuracy_score, f1_score, brier_sc
 # Import re-usable functions from utility folder
 toolbox_path = '../Utility_Functions'
 sys.path.append(toolbox_path)
-from functions import logistic_model_process, classical_model_process, mlp_model_process
+from functions import logistic_model_process, classical_model_process, mlp_model_process, odds_to_implied_prob
 
 # Set formatting preferences for debugging in Pycharm editor
 pd.set_option('display.width', 200)
@@ -83,6 +83,8 @@ mlp_output1 = mlp_model_process(df_train=df_train1,
                   early_stopping=True,
                   decorrelate=False,
                   title='Model with Train/Test 1')
+mlp_output1.to_csv('Processed/mlp_df_for_ensemble.csv', index=False, index_label=False)
+# mlp_output1 = pd.read_csv('Processed/mlp_df_for_ensemble.csv') # Avoid re-running model in future
 
 # Also do logit MLE (probabilistic model)
 logitmle_output1 = classical_model_process(df_train=df_train1, df_test=df_test1,
@@ -114,7 +116,9 @@ ensemble_input = pd.merge(ensemble_input,
                           mlp_output1[['home_id','mlp_pred_home']],
                           on='home_id',
                           how='inner')
-
+ensemble_input['home_implied_prob'] = ensemble_input['hH2h'].map(lambda x: odds_to_implied_prob(x))
+ensemble_input['away_implied_prob'] = ensemble_input['vH2h'].map(lambda x: odds_to_implied_prob(x))
+ensemble_input.to_csv('Processed/ensemble_model_df.csv', index=False, index_label=False)
 
 features = ['logistic_pred_home',  'logistic2_pred_home',  'logit_mle_pred_home',  'mlp_pred_home']
 target = ['home_result']

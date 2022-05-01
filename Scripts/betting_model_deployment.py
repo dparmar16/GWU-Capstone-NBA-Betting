@@ -40,10 +40,21 @@ print(combined.head(5))
 # 3     4548     2018-11-07            1 -270.0  220.0            0.764635            0.235365           0.729730           0.312500       0.768728       0.231272
 # 4     4546     2018-11-07            1 -550.0  400.0            0.814913            0.185087           0.846154           0.200000       0.797763       0.202237
 
+# Look at model probability correlation - 0.92361481
+corr_logistic_mlp = np.corrcoef(combined['logistic_pred_home'], combined['mlp_pred_home'])
+print(f'The correlation coefficient between the logistic and MLP models is {corr_logistic_mlp}')
+
 # Look at the models to see where they agree and when they are correct
 colormap = {0: 'red', 1: 'green'}
 plt.scatter(combined['logistic_pred_home'], combined['mlp_pred_home'], c=combined['home_result'].map(colormap))
+plt.xlabel('Home Win Probability via Logistic', fontdict = {'fontsize' : 14})
+plt.ylabel('Home Win Probability via MLP', fontdict = {'fontsize' : 14})
+plt.title('Model Agreement between Logistic and MLP', fontdict = {'fontsize' : 17})
+plt.text(0.6, 0.2, 'Green is home win\nRed is away win',  fontsize=15,
+        verticalalignment='top', bbox=dict(boxstyle='round', facecolor='black', alpha=0.1))
 plt.show()
+
+
 
 # Look at how models correlate to output and when they are correct
 colormap = {0: 'red', 1: 'green'}
@@ -106,22 +117,6 @@ def betting_deployment(df,
     # 'home_result'
     # 'hH2h' #--> to decimal
     # 'vH2h' #--> to decimal
-
-    # df['home_opt_edge'] = df['home_opt'] - df['home_implied_prob']
-    # df['home_avg_edge'] = df['home_avg'] - df['home_implied_prob']
-    # df['home_pes_edge'] = df['home_pes'] - df['home_implied_prob']
-    #
-    # df['home_opt_edge_relative'] = (df['home_opt'] - df['home_implied_prob']) / df['home_implied_prob']
-    # df['home_avg_edge_relative'] = (df['home_avg'] - df['home_implied_prob']) / df['home_implied_prob']
-    # df['home_pes_edge_relative'] = (df['home_pes'] - df['home_implied_prob']) / df['home_implied_prob']
-    #
-    # df['away_opt_edge'] = df['away_opt'] - df['away_implied_prob']
-    # df['away_avg_edge'] = df['away_avg'] - df['away_implied_prob']
-    # df['away_pes_edge'] = df['away_pes'] - df['away_implied_prob']
-    #
-    # df['away_opt_edge_relative'] = (df['away_opt'] - df['away_implied_prob']) / df['away_implied_prob']
-    # df['away_avg_edge_relative'] = (df['away_avg'] - df['away_implied_prob']) / df['away_implied_prob']
-    # df['away_pes_edge_relative'] = (df['away_pes'] - df['away_implied_prob']) / df['away_implied_prob']
 
     print(df.columns)
     # Convert odds to decimal to use in betting
@@ -199,56 +194,30 @@ def betting_deployment(df,
                                                   data['vH2h_decimal'] * wager_amount,
                                                   -1 * wager_amount)
                     daily_return += away_money_outcome
+            if bet_strategy == 'everything':
+                # Wager the percentage given, but make sure it's not more than the max allowed
+                wager_amount = max(np.where(percentage_stake > max_percentage, max_percentage, percentage_stake), 0)
+                if alpha_type == 'relative':
+                    home_alpha = data['home_edge_relative']
+                    away_alpha = data['away_edge_relative']
+                elif alpha_type == 'absolute':
+                    home_alpha = data['home_edge']
+                    away_alpha = data['away_edge']
+                if home_alpha >= 0 and away_alpha < 0:
+                    home_money_outcome = np.where(data['home_result'] == 1,
+                                                  data['hH2h_decimal'] * wager_amount,
+                                                  -1 * wager_amount)
+                    daily_return += home_money_outcome
+                if away_alpha >= 0 and home_alpha < 0:
+                    away_money_outcome = np.where(data['home_result'] == 0,
+                                                  data['vH2h_decimal'] * wager_amount,
+                                                  -1 * wager_amount)
+                    daily_return += away_money_outcome
 
         bankroll_amount -= daily_return
         capital_list.append([dt, bankroll_amount])
 
     result = pd.DataFrame(capital_list, columns=['date', 'capital'])
-
-    # # 1. loop through each day --> get individual date block from df
-    # # 2. find all positive kelly and make those bets but cap it
-    # # find positive kelly bets, but cap the bet
-    # if bet_strategy == 'kelly':
-    #     for dt in sorted(df['home_startDate'].unique()):
-    #         daily = df[df['home_startDate'] == dt]
-    #         daily_return = 0
-    #         print('the daily df is')
-    #         print(daily)
-    #         for idx, data in daily.iterrows():
-    #             kelly_home = kelly_criterion(model_prob_win=data['home_prob'], market_odds=data['hH2h'],
-    #                                          multiplier=kelly_multiplier, max=max_percentage)
-    #             kelly_away = kelly_criterion(model_prob_win=data['away_prob'], market_odds=data['vH2h'],
-    #                                          multiplier=kelly_multiplier, max=max_percentage)
-    #             print('The data is')
-    #             print(data)
-    #             print('Kelly home is', kelly_home)
-    #             print('Kelly away is', kelly_away)
-    #             print(data['home_result'])
-    #             if kelly_home > 0 and kelly_away <= 0:
-    #                 wager_amount = bankroll_amount * kelly_home
-    #                 home_money_outcome = np.where(data['home_result'] == 1,
-    #                                    data['hH2h_decimal'] * wager_amount,
-    #                                    -1 * wager_amount)
-    #                 daily_return += home_money_outcome
-    #                 print('Home money delta is', home_money_outcome)
-    #             if kelly_away > 0 and kelly_home <= 0:
-    #                 wager_amount = bankroll_amount * kelly_away
-    #                 away_money_outcome = np.where(data['home_result'] == 0,
-    #                                               data['vH2h_decimal'] * wager_amount,
-    #                                               -1 * wager_amount)
-    #                 daily_return += away_money_outcome
-    #                 print('Away money delta is', away_money_outcome)
-    #             print('\n\n\n')
-    #
-    #         bankroll_amount -= daily_return
-    #         capital_list.append([dt, bankroll_amount])
-    #
-    #     result = pd.DataFrame(capital_list, columns=['date', 'capital'])
-    #
-    # if bet_strategy == 'percentage':
-    #     pass
-    #     # 1. loop through each day --> get individual date block from df
-    #     # 2. set market alpha threshold and bet set percentage (1%) on all matches that meet criteria
 
     plt.plot(result['date'], result['capital'])
     plt.xlabel('Date')
@@ -312,6 +281,26 @@ betting_deployment(df=combined[combined['home_startDate'] <= '2019-10-01'],
 betting_deployment(df=combined[combined['home_startDate'] <= '2019-10-01'],
                    model_optimism='pes',
                    bet_strategy='percentage',
+                   kelly_multiplier=0.5,
+                   percentage_stake=0.01,
+                   bankroll_amount=1,
+                   alpha_type='absolute',  # 'absolute' or 'relative'
+                   alpha_threshold=0.05,
+                   max_percentage=0.01,
+                   )
+
+ensemble = pd.read_csv('Processed/ensemble_model_df.csv')
+ensemble['home_opt'] = ensemble.apply(lambda x: max(x.logistic_pred_home, x.logistic2_pred_home, x.logit_mle_pred_home, x.mlp_pred_home), axis=1)
+ensemble['home_avg'] = ensemble.apply(lambda x: np.mean([x.logistic_pred_home, x.logistic2_pred_home, x.logit_mle_pred_home, x.mlp_pred_home]), axis=1)
+ensemble['home_pes'] = ensemble.apply(lambda x: min(x.logistic_pred_home, x.logistic2_pred_home, x.logit_mle_pred_home, x.mlp_pred_home), axis=1)
+
+ensemble['away_opt'] = ensemble.apply(lambda x: max(1 - x.logistic_pred_home, 1 - x.logistic2_pred_home, 1 - x.logit_mle_pred_home, 1 - x.mlp_pred_home), axis=1)
+ensemble['away_avg'] = ensemble.apply(lambda x: np.mean([1 - x.logistic_pred_home, 1 - x.logistic2_pred_home, 1 - x.logit_mle_pred_home, 1 - x.mlp_pred_home]), axis=1)
+ensemble['away_pes'] = ensemble.apply(lambda x: min(1 - x.logistic_pred_home, 1 - x.logistic2_pred_home, 1 - x.logit_mle_pred_home, 1 - x.mlp_pred_home), axis=1)
+
+betting_deployment(df=ensemble,
+                   model_optimism='avg',
+                   bet_strategy='everything',
                    kelly_multiplier=0.5,
                    percentage_stake=0.01,
                    bankroll_amount=1,
