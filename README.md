@@ -52,6 +52,29 @@ Models tried include:
 | Point Differential and Rest| 0.721| 0.720| 0.691| 0.712 |
 | No Features (ARMA only) | | | | | 0.604 |
 
+**Brier Score**
 
-### Repository Explanation
+| Feature Set Name|  Logistic Regression|  Logit MLE | Naïve Bayes | MLP |
+| :---: | :---: | :---: | :---: | :---: |
+| All Features or N/A | 0.212 | 0.212 | 0.275 | 0.213 | 
+| Spread Only | 0.206 | 0.206 | 0.206 | 0.247 |
+| Spread Comprehensive| 0.737| 0.737| 0.729| 0.728 |
+| Elo| 0.213| 0.213| 0.228| 0.217| 
+| Spread Coefficient| 0.211| 0.211| 0.211| 0.224| 
+| Spread Weighted Coefficient| 0.210| 0.210| 0.210| 0.214| 
+| Four Factors| 0.226| 0.226| 0.230| 0.231 |
+| Four Factors Moving Avg| 0.232| 0.232| 0.235| 0.234 |
+| NBA 2k| 0.223| 0.223| 0.232| 0.222 |
+| Point Differential and Rest| 0.215| 0.215| 0.256| 0.218 |
 
+### Conclusion 
+
+One notable finding that the different static model types (logistic regression, logit, naïve bayes, and multi-layer perceptron) all come to approximately the same performance metrics. This suggests that feature engineering and pre-processing are just as important as model selection for sports forecasting. 
+
+As the closing point spread captures a large amount of market information and wisdom of the crowd, it predicts the outcome of a game the best of all the features created. A model with just the closing line is better than a model with additional information about the teams themselves. This suggests that markets are highly efficient, and adding correlated features such as winning percentage, point differential, and shooting percentage can actually harm model performance through multi-collinearity and unnecessary complexity. 
+
+Although this is time ordered data, doing an ARMA model on a target variable was not effective. There may be a way to do time series analysis on player performance fluctuations, but it’s possible that sports data has much more day-to-day variance and model complexity than daily temperatures or airline passengers (datasets commonly modelled with time series). 
+
+Given the information captured with this dataset, there seems to be a ceiling of an F1-score of around 75% and floor on the Brier score loss of around 0.2. Ensembling models together helped slightly, but it doesn’t get the metrics past this ceiling. At this level, the models are not precise enough to use in betting, as missed classifications are very costly and there is an oddsmaker cut in priced into each bet. 
+
+To take the next step in model performance, there is a need for data beyond simple box scores and game statistics. Examples of this would be a better understanding of team-specific matchups (how does Team A match up with Team B), player ability fluctuations within a season, and a method to identify how many minutes each player will play (and to put an outcome-specific weight to their effectiveness). It is likely that this advanced work is already happening, but it is proprietary, as one would not want to lose the financial edge in developing such insights. 
