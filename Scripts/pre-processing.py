@@ -52,7 +52,7 @@ gs['streak_with_game_ha'] = gs.groupby(by=['seasonYear', 'teamId', 'home_flag', 
 gs['streak_with_game_ha'] = gs['streak_with_game_ha'] * gs['result_for_streak_var']
 gs['streak_entering_ha'] = gs.groupby(by=['seasonYear', 'teamId', 'home_flag'])['streak_with_game_ha'].apply(lambda x: x.shift(1))
 
-gs['result_binary'] = np.where(gs['plusMinus'] > 0, 1, -1)
+gs['result_binary'] = np.where(gs['plusMinus'] > 0, 1, 0)
 gs['win_percentage_last10'] = gs.groupby(by=['seasonYear', 'teamId'])['result_binary'].transform(lambda x: x.rolling(10, 1).mean())
 gs['win_percentage_ha_last10'] = gs.groupby(by=['seasonYear', 'teamId', 'home_flag'])['result_binary'].transform(lambda x: x.rolling(10, 1).mean())
 
